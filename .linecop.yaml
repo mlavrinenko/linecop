@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=linecop-schema.json
+limits:
+  Rust: 500
+  Markdown: 200
+
+overrides:
+  - pattern: "./RESEARCH.md"
+    exclude: true
+  - pattern: "./PLAN.md"
+    exclude: true

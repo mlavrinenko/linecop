@@ -1,10 +1,54 @@
-use anyhow::Result;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
-#[allow(clippy::unnecessary_wraps)] // Skeleton — real main will have fallible calls
-fn main() -> Result<()> {
+use clap::{Parser, Subcommand};
+
+use linecop::report::Format;
+
+#[derive(Parser)]
+#[command(about = "Patrols your code base to enforce line count limits.")]
+struct Cli {
+    /// Root directory to scan.
+    #[arg(default_value = ".")]
+    path: PathBuf,
+
+    /// Path to the config file.
+    #[arg(short, long, default_value = ".linecop.yaml")]
+    config: PathBuf,
+
+    /// Suppress output (exit code only).
+    #[arg(short, long)]
+    quiet: bool,
+
+    /// Output format.
+    #[arg(long, default_value = "text", value_enum)]
+    format: Format,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Print the JSON Schema for .linecop.yaml configuration.
+    Schema,
+}
+
+fn main() -> ExitCode {
     env_logger::init();
+    let cli = Cli::parse();
 
-    println!("Hello from linecop!");
+    if let Some(Command::Schema) = cli.command {
+        print!("{}", linecop::schema::generate());
+        return ExitCode::SUCCESS;
+    }
 
-    Ok(())
+    match linecop::run(&cli.path, &cli.config, cli.quiet, cli.format) {
+        Ok(true) => ExitCode::FAILURE,
+        Ok(false) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("error: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
 }

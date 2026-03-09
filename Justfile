@@ -46,4 +46,4 @@ file-sizes:
 
 # Check for oversized files (fails if any exceed limits)
 check-file-size:
-    tokei --files --output json --exclude archive | jq -rf check-file-size.jq
+    cargo run -q -- --quiet
