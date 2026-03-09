@@ -3,7 +3,6 @@ use std::path::Path;
 use anyhow::{Result, bail};
 
 const STARTER_CONFIG: &str = "\
-# yaml-language-server: $schema=linecop-schema.json
 limits:
   Rust: 500
   Markdown: 200
@@ -20,7 +19,7 @@ pub fn create(dir: &Path) -> Result<String> {
         bail!("{} already exists", path.display());
     }
     std::fs::write(&path, STARTER_CONFIG)?;
-    Ok(path.display().to_string())
+    Ok(format!("Created {}", path.display()))
 }
 
 #[cfg(test)]
@@ -36,7 +35,6 @@ mod tests {
         let contents = std::fs::read_to_string(dir.path().join(".linecop.yaml")).expect("read");
         assert!(contents.contains("limits:"));
         assert!(contents.contains("Rust: 500"));
-        assert!(contents.contains("yaml-language-server"));
     }
 
     #[test]

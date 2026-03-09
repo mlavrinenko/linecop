@@ -1,12 +1,16 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use linecop::report::Format;
 
 #[derive(Parser)]
-#[command(about = "Patrols your code base to enforce line count limits.", version)]
+#[command(
+    about = "Patrols your code base to enforce line count limits.",
+    version
+)]
 struct Cli {
     /// Root directory to scan.
     #[arg(default_value = ".")]
@@ -24,6 +28,10 @@ struct Cli {
     #[arg(long, default_value = "text", value_enum)]
     format: Format,
 
+    /// Control color output.
+    #[arg(long, value_enum, default_value = "auto")]
+    color: clap::ColorChoice,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -36,41 +44,36 @@ enum Command {
     Schema,
 }
 
+fn run_subcommand(result: Result<String>) -> ExitCode {
+    match result {
+        Ok(msg) => {
+            println!("{msg}");
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("error: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
-    env_logger::init();
     let cli = Cli::parse();
 
+    match cli.color {
+        clap::ColorChoice::Always => anstream::ColorChoice::Always,
+        clap::ColorChoice::Never => anstream::ColorChoice::Never,
+        clap::ColorChoice::Auto => anstream::ColorChoice::Auto,
+    }
+    .write_global();
+
     match cli.command {
-        Some(Command::Init) => {
-            match linecop::init::create(&cli.path) {
-                Ok(path) => {
-                    println!("Created {path}");
-                    return ExitCode::SUCCESS;
-                }
-                Err(err) => {
-                    eprintln!("error: {err:#}");
-                    return ExitCode::FAILURE;
-                }
-            }
-        }
-        Some(Command::Schema) => {
-            match linecop::schema::generate() {
-                Ok(schema) => {
-                    print!("{schema}");
-                    return ExitCode::SUCCESS;
-                }
-                Err(err) => {
-                    eprintln!("error: {err:#}");
-                    return ExitCode::FAILURE;
-                }
-            }
-        }
+        Some(Command::Init) => return run_subcommand(linecop::init::create(&cli.path)),
+        Some(Command::Schema) => return run_subcommand(linecop::schema::generate()),
         None => {}
     }
 
-    let config_path = cli
-        .config
-        .unwrap_or_else(|| cli.path.join(".linecop.yaml"));
+    let config_path = cli.config.unwrap_or_else(|| cli.path.join(".linecop.yaml"));
 
     match linecop::run(&cli.path, &config_path, cli.quiet, cli.format) {
         Ok(true) => ExitCode::FAILURE,

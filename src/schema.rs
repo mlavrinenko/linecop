@@ -38,4 +38,16 @@ mod tests {
         let props = parsed.get("properties").expect("properties");
         assert!(props.get("count_mode").is_some());
     }
+
+    #[test]
+    fn committed_schema_is_in_sync() {
+        let generated = generate().expect("generate");
+        let committed =
+            std::fs::read_to_string("linecop-schema.json").expect("read committed schema");
+        assert_eq!(
+            generated.trim(),
+            committed.trim(),
+            "linecop-schema.json is out of sync — run `just schema` to regenerate"
+        );
+    }
 }

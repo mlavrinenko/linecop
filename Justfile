@@ -1,7 +1,12 @@
 # Development recipes
 
-# Run all checks (clippy + tests + file size)
+# List available recipes
+default:
+    @just --list
+
+# Run all checks (format + clippy + tests + file size)
 check:
+    just fmt-check
     cargo clippy --workspace --all-targets -q -- -D warnings
     cargo test --workspace -q
     just check-file-size
@@ -34,6 +39,10 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
+# Regenerate the JSON Schema file
+schema:
+    cargo run -q -- schema > linecop-schema.json
+
 # Count tests across workspace
 count-tests:
     #!/usr/bin/env bash
@@ -47,3 +56,9 @@ file-sizes:
 # Check for oversized files (fails if any exceed limits)
 check-file-size:
     cargo run -q -- --quiet
+
+# Tag and push a release
+release version:
+    @echo "Tagging v{{version}}..."
+    git tag -a "v{{version}}" -m "Release v{{version}}"
+    git push origin "v{{version}}"

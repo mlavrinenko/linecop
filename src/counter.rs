@@ -84,21 +84,9 @@ pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
 #[allow(clippy::indexing_slicing)]
 mod tests {
     use super::count;
-    use crate::config::{Config, CountMode};
-    use std::collections::BTreeMap;
+    use crate::config::CountMode;
+    use crate::test_helpers::make_config;
     use std::io::Write;
-
-    fn make_config(limits: &[(&str, u64)]) -> Config {
-        Config {
-            count_mode: CountMode::Total,
-            limits: limits
-                .iter()
-                .map(|(kk, vv)| ((*kk).to_owned(), *vv))
-                .collect::<BTreeMap<_, _>>(),
-            overrides: vec![],
-            exclude_dirs: vec!["target".to_owned()],
-        }
-    }
 
     #[test]
     fn count_rust_files() {
@@ -109,7 +97,7 @@ mod tests {
         writeln!(file, "    println!(\"hello\");").expect("write");
         writeln!(file, "}}").expect("write");
 
-        let config = make_config(&[("Rust", 500)]);
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let stats = count(dir.path(), &config).expect("count");
 
         assert_eq!(stats.len(), 1);
@@ -121,7 +109,7 @@ mod tests {
     #[test]
     fn count_empty_directory() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let config = make_config(&[("Rust", 500)]);
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let stats = count(dir.path(), &config).expect("count");
         assert!(stats.is_empty());
     }
@@ -135,7 +123,7 @@ mod tests {
         writeln!(file).expect("write");
         writeln!(file, "fn main() {{}}").expect("write");
 
-        let config = make_config(&[("Rust", 500)]);
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let stats = count(dir.path(), &config).expect("count");
 
         assert_eq!(stats.len(), 1);
@@ -153,7 +141,7 @@ mod tests {
         let mut file = std::fs::File::create(&py_path).expect("create");
         writeln!(file, "print('hello')").expect("write");
 
-        let config = make_config(&[("Rust", 500)]);
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let stats = count(dir.path(), &config).expect("count");
         assert!(stats.is_empty());
     }
@@ -166,7 +154,7 @@ mod tests {
         let mut file = std::fs::File::create(&rs_path).expect("create");
         writeln!(file, "fn lib() {{}}").expect("write");
 
-        let mut config = make_config(&[("Rust", 500)]);
+        let mut config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         // Default excludes "target" only, so vendor/lib.rs should be counted
         let stats = count(dir.path(), &config).expect("count");
         assert_eq!(stats.len(), 1);

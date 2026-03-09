@@ -212,11 +212,6 @@ overrides matched).
 
 ## 4. Minor Issues
 
-### 4.1 `serde_yml` version pinned to `0.0.12`
-
-This is a `0.0.x` pre-release crate. Consider whether `serde_yaml` (the maintained fork)
-would be more appropriate, or at least document why `serde_yml` was chosen.
-
 ### 4.2 No `--color` flag
 
 `anstream` handles auto-detection, but there's no way to force `--color=always` or

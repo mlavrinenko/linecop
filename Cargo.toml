@@ -1,12 +1,14 @@
-[workspace]
-members = [] # Add sub-crate paths here as the project grows
-
 [package]
 name = "linecop"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "Patrols your code base to enforce line count limits."
+repository = "https://github.com/mlavrinenko/linecop"
 license = "MIT"
+keywords = ["cli", "linter", "code-quality", "lines", "tokei"]
+categories = ["command-line-utilities", "development-tools"]
+include = ["/src/", "/tests/", "/LICENSE", "/README.md"]
 
 [lib]
 name = "linecop"
@@ -17,9 +19,8 @@ name = "linecop"
 path = "src/main.rs"
 
 [dependencies]
-thiserror = "2"
 anyhow = "1"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "color"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yml = "0.0.12"
@@ -28,22 +29,23 @@ anstyle = "1"
 globset = "0.4"
 tokei = { version = "14", default-features = false }
 schemars = "1"
-log = "0.4"
-env_logger = "0.11"
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 
-[lints]
-workspace = true
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
 
-[workspace.lints.rust]
+[lints.rust]
 unsafe_code = "deny"
 unused_must_use = "deny"
 
-[workspace.lints.clippy]
+[lints.clippy]
 # --- Correctness & Safety ---
 out_of_bounds_indexing = "deny"
 iter_out_of_bounds = "deny"

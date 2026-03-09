@@ -5,6 +5,9 @@ pub mod init;
 pub mod report;
 pub mod schema;
 
+#[cfg(test)]
+pub(crate) mod test_helpers;
+
 use std::path::Path;
 
 use anyhow::{Result, bail};
@@ -90,7 +93,12 @@ mod tests {
     #[test]
     fn run_nonexistent_root_path() {
         let cfg_path = std::path::Path::new(".linecop.yaml");
-        let result = run(std::path::Path::new("/nonexistent/path"), cfg_path, true, Format::Text);
+        let result = run(
+            std::path::Path::new("/nonexistent/path"),
+            cfg_path,
+            true,
+            Format::Text,
+        );
         let err = result.expect_err("should fail for nonexistent path");
         assert!(err.to_string().contains("scan path does not exist"));
     }

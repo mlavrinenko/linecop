@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use globset::Glob;
+use globset::{Glob, GlobMatcher};
 
 use crate::config::{Config, CountMode};
 use crate::counter::FileStats;
@@ -18,6 +18,13 @@ pub struct Violation {
     pub limit: u64,
 }
 
+/// A compiled override rule ready for matching.
+struct CompiledOverride {
+    matcher: GlobMatcher,
+    limit: Option<u64>,
+    exclude: bool,
+}
+
 /// Selects the line count based on the configured count mode.
 fn select_count(file: &FileStats, mode: CountMode) -> u64 {
     match mode {
@@ -28,11 +35,13 @@ fn select_count(file: &FileStats, mode: CountMode) -> u64 {
 }
 
 /// Finds the effective limit for a file, checking overrides first.
-fn effective_limit(file: &FileStats, config: &Config) -> Option<u64> {
-    for ovr in &config.overrides {
-        if let Ok(glob) = Glob::new(&ovr.pattern)
-            && glob.compile_matcher().is_match(&file.path)
-        {
+fn effective_limit(
+    file: &FileStats,
+    config: &Config,
+    compiled: &[CompiledOverride],
+) -> Option<u64> {
+    for ovr in compiled {
+        if ovr.matcher.is_match(&file.path) {
             if ovr.exclude {
                 return None;
             }
@@ -45,10 +54,25 @@ fn effective_limit(file: &FileStats, config: &Config) -> Option<u64> {
 }
 
 /// Checks all files against their limits and returns violations.
+///
+/// Glob patterns from overrides are compiled once upfront for efficiency.
+/// Invalid patterns are skipped (they are validated at config load time).
 pub fn check(files: &[FileStats], config: &Config) -> Vec<Violation> {
+    let compiled: Vec<CompiledOverride> = config
+        .overrides
+        .iter()
+        .filter_map(|ovr| {
+            Glob::new(&ovr.pattern).ok().map(|glob| CompiledOverride {
+                matcher: glob.compile_matcher(),
+                limit: ovr.limit,
+                exclude: ovr.exclude,
+            })
+        })
+        .collect();
+
     let mut violations = Vec::new();
     for file in files {
-        if let Some(limit) = effective_limit(file, config) {
+        if let Some(limit) = effective_limit(file, config, &compiled) {
             let lines = select_count(file, config.count_mode);
             if lines > limit {
                 violations.push(Violation {
@@ -66,33 +90,23 @@ pub fn check(files: &[FileStats], config: &Config) -> Vec<Violation> {
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
-    use super::{check, effective_limit, select_count};
+    use super::{CompiledOverride, check, effective_limit, select_count};
     use crate::config::{Config, CountMode, Override};
-    use crate::counter::FileStats;
-    use std::collections::BTreeMap;
-    use std::path::PathBuf;
+    use crate::test_helpers::{make_config, make_file};
+    use globset::Glob;
 
-    fn make_file(path: &str, lang: &str, code: u64, comments: u64, blanks: u64) -> FileStats {
-        FileStats {
-            path: PathBuf::from(path),
-            language: lang.to_owned(),
-            total: code + comments + blanks,
-            code,
-            comments,
-            blanks,
-        }
-    }
-
-    fn make_config(limits: &[(&str, u64)], overrides: Vec<Override>, mode: CountMode) -> Config {
-        Config {
-            count_mode: mode,
-            limits: limits
-                .iter()
-                .map(|(kk, vv)| ((*kk).to_owned(), *vv))
-                .collect::<BTreeMap<_, _>>(),
-            overrides,
-            exclude_dirs: vec!["target".to_owned()],
-        }
+    fn compile_overrides(config: &Config) -> Vec<CompiledOverride> {
+        config
+            .overrides
+            .iter()
+            .filter_map(|ovr| {
+                Glob::new(&ovr.pattern).ok().map(|glob| CompiledOverride {
+                    matcher: glob.compile_matcher(),
+                    limit: ovr.limit,
+                    exclude: ovr.exclude,
+                })
+            })
+            .collect()
     }
 
     #[test]
@@ -141,7 +155,6 @@ mod tests {
 
     #[test]
     fn code_only_mode() {
-        // 400 code + 60 comments + 50 blanks = 510 total, but code-only = 400
         let files = vec![make_file("src/main.rs", "Rust", 400, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Code);
         let violations = check(&files, &config);
@@ -150,7 +163,6 @@ mod tests {
 
     #[test]
     fn code_comments_mode() {
-        // code + comments = 460, under 500
         let files = vec![make_file("src/main.rs", "Rust", 400, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::CodeComments);
         let violations = check(&files, &config);
@@ -159,7 +171,6 @@ mod tests {
 
     #[test]
     fn code_comments_mode_violation() {
-        // code + comments = 510, over 500
         let files = vec![make_file("src/main.rs", "Rust", 450, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::CodeComments);
         let violations = check(&files, &config);
@@ -191,7 +202,6 @@ mod tests {
             },
         ];
         let config = make_config(&[("Rust", 500)], overrides, CountMode::Total);
-        // First override matches with limit 1000, file has 800 -> no violation
         let violations = check(&files, &config);
         assert!(violations.is_empty());
     }
@@ -218,7 +228,8 @@ mod tests {
     fn effective_limit_with_no_overrides() {
         let file = make_file("src/main.rs", "Rust", 10, 0, 0);
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        assert_eq!(effective_limit(&file, &config), Some(500));
+        let compiled = compile_overrides(&config);
+        assert_eq!(effective_limit(&file, &config, &compiled), Some(500));
     }
 
     #[test]
@@ -230,7 +241,8 @@ mod tests {
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
-        assert_eq!(effective_limit(&file, &config), None);
+        let compiled = compile_overrides(&config);
+        assert_eq!(effective_limit(&file, &config, &compiled), None);
     }
 
     #[test]

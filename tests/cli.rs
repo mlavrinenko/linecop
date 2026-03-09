@@ -86,8 +86,7 @@ fn json_format_outputs_valid_json() {
         .stdout
         .clone();
 
-    let parsed: serde_json::Value =
-        serde_json::from_slice(&output).expect("valid json output");
+    let parsed: serde_json::Value = serde_json::from_slice(&output).expect("valid json output");
     let arr = parsed.as_array().expect("array");
     assert!(!arr.is_empty());
 }
