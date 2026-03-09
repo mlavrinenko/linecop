@@ -4,7 +4,5 @@ limits:
   Markdown: 200
 
 overrides:
-  - pattern: "./RESEARCH.md"
-    exclude: true
-  - pattern: "./PLAN.md"
+  - pattern: "./REVIEW.md"
     exclude: true
