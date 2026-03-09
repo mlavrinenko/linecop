@@ -12,9 +12,9 @@ struct Cli {
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Path to the config file.
-    #[arg(short, long, default_value = ".linecop.yaml")]
-    config: PathBuf,
+    /// Path to the config file (default: <PATH>/.linecop.yaml).
+    #[arg(short, long)]
+    config: Option<PathBuf>,
 
     /// Suppress output (exit code only).
     #[arg(short, long)]
@@ -51,7 +51,11 @@ fn main() -> ExitCode {
         }
     }
 
-    match linecop::run(&cli.path, &cli.config, cli.quiet, cli.format) {
+    let config_path = cli
+        .config
+        .unwrap_or_else(|| cli.path.join(".linecop.yaml"));
+
+    match linecop::run(&cli.path, &config_path, cli.quiet, cli.format) {
         Ok(true) => ExitCode::FAILURE,
         Ok(false) => ExitCode::SUCCESS,
         Err(err) => {

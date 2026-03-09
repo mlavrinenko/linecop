@@ -33,6 +33,11 @@ pub struct Override {
     pub exclude: bool,
 }
 
+/// Returns the default set of directories to exclude from scanning.
+fn default_exclude_dirs() -> Vec<String> {
+    vec!["target".to_owned()]
+}
+
 /// Top-level configuration for linecop.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -45,6 +50,9 @@ pub struct Config {
     /// Per-path overrides applied in order.
     #[serde(default)]
     pub overrides: Vec<Override>,
+    /// Directory names to exclude from scanning (default: ["target"]).
+    #[serde(default = "default_exclude_dirs")]
+    pub exclude_dirs: Vec<String>,
 }
 
 /// Loads and validates a config from the given YAML file.
@@ -56,7 +64,7 @@ pub struct Config {
 pub fn load(path: &Path) -> Result<Config> {
     let contents = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config file: {}", path.display()))?;
-    let config: Config = serde_yaml::from_str(&contents)
+    let config: Config = serde_yml::from_str(&contents)
         .with_context(|| format!("failed to parse config file: {}", path.display()))?;
     validate(&config)?;
     Ok(config)
@@ -113,7 +121,7 @@ overrides:
   - pattern: "src/generated_*.rs"
     limit: 1000
 "#;
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         assert_eq!(config.count_mode, CountMode::Code);
         assert_eq!(config.limits.len(), 2);
         assert_eq!(config.overrides.len(), 2);
@@ -123,7 +131,7 @@ overrides:
     #[test]
     fn parse_minimal_config() {
         let yaml = "limits:\n  Rust: 500\n";
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         assert_eq!(config.count_mode, CountMode::Total);
         assert!(config.overrides.is_empty());
         validate(&config).expect("valid");
@@ -132,7 +140,7 @@ overrides:
     #[test]
     fn unknown_language_rejected() {
         let yaml = "limits:\n  FakeLang: 100\n";
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         let err = validate(&config).expect_err("should reject unknown language");
         assert!(err.to_string().contains("unknown language"));
     }
@@ -145,7 +153,7 @@ limits:
 overrides:
   - pattern: "*.rs"
 "#;
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         let err = validate(&config).expect_err("should reject override without limit or exclude");
         assert!(err.to_string().contains("must have either"));
     }
@@ -159,7 +167,7 @@ overrides:
   - pattern: "[invalid"
     exclude: true
 "#;
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         let err = validate(&config).expect_err("should reject invalid glob");
         assert!(err.to_string().contains("invalid glob pattern"));
     }
@@ -167,7 +175,7 @@ overrides:
     #[test]
     fn deny_unknown_fields() {
         let yaml = "limits:\n  Rust: 500\nunknown_field: true\n";
-        let result = serde_yaml::from_str::<Config>(yaml);
+        let result = serde_yml::from_str::<Config>(yaml);
         assert!(result.is_err());
     }
 
@@ -190,15 +198,29 @@ overrides:
     #[test]
     fn count_mode_default_is_total() {
         let yaml = "limits:\n  Rust: 500\n";
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         assert_eq!(config.count_mode, CountMode::Total);
     }
 
     #[test]
     fn count_mode_code_comments() {
         let yaml = "count_mode: code-comments\nlimits:\n  Rust: 500\n";
-        let config: Config = serde_yaml::from_str(yaml).expect("parse");
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
         assert_eq!(config.count_mode, CountMode::CodeComments);
+    }
+
+    #[test]
+    fn exclude_dirs_defaults_to_target() {
+        let yaml = "limits:\n  Rust: 500\n";
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
+        assert_eq!(config.exclude_dirs, vec!["target"]);
+    }
+
+    #[test]
+    fn exclude_dirs_custom() {
+        let yaml = "limits:\n  Rust: 500\nexclude_dirs:\n  - vendor\n  - dist\n";
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
+        assert_eq!(config.exclude_dirs, vec!["vendor", "dist"]);
     }
 
     #[test]

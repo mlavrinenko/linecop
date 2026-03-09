@@ -56,8 +56,10 @@ pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
         ..tokei::Config::default()
     };
 
+    let exclude_dirs: Vec<&str> = config.exclude_dirs.iter().map(String::as_str).collect();
+
     let mut languages = Languages::new();
-    languages.get_statistics(&[root], &["target"], &tokei_config);
+    languages.get_statistics(&[root], &exclude_dirs, &tokei_config);
 
     let mut results = Vec::new();
     for (lang_type, language) in &languages {
@@ -94,6 +96,7 @@ mod tests {
                 .map(|(kk, vv)| ((*kk).to_owned(), *vv))
                 .collect::<BTreeMap<_, _>>(),
             overrides: vec![],
+            exclude_dirs: vec!["target".to_owned()],
         }
     }
 
@@ -151,6 +154,25 @@ mod tests {
         writeln!(file, "print('hello')").expect("write");
 
         let config = make_config(&[("Rust", 500)]);
+        let stats = count(dir.path(), &config).expect("count");
+        assert!(stats.is_empty());
+    }
+
+    #[test]
+    fn custom_exclude_dirs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("vendor")).expect("mkdir");
+        let rs_path = dir.path().join("vendor/lib.rs");
+        let mut file = std::fs::File::create(&rs_path).expect("create");
+        writeln!(file, "fn lib() {{}}").expect("write");
+
+        let mut config = make_config(&[("Rust", 500)]);
+        // Default excludes "target" only, so vendor/lib.rs should be counted
+        let stats = count(dir.path(), &config).expect("count");
+        assert_eq!(stats.len(), 1);
+
+        // Add "vendor" to exclude_dirs
+        config.exclude_dirs.push("vendor".to_owned());
         let stats = count(dir.path(), &config).expect("count");
         assert!(stats.is_empty());
     }

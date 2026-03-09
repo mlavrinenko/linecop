@@ -9,6 +9,16 @@
       "$ref": "#/$defs/CountMode",
       "default": "total"
     },
+    "exclude_dirs": {
+      "description": "Directory names to exclude from scanning (default: [\"target\"]).",
+      "type": "array",
+      "default": [
+        "target"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
     "limits": {
       "description": "Per-language line limits. Keys are tokei language names (e.g. \"Rust\", \"Python\").",
       "type": "object",

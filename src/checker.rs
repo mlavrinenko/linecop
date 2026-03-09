@@ -91,6 +91,7 @@ mod tests {
                 .map(|(kk, vv)| ((*kk).to_owned(), *vv))
                 .collect::<BTreeMap<_, _>>(),
             overrides,
+            exclude_dirs: vec!["target".to_owned()],
         }
     }
 
