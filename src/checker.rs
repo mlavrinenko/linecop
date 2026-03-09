@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use glob::Pattern;
+use globset::Glob;
 
 use crate::config::{Config, CountMode};
 use crate::counter::FileStats;
@@ -30,8 +30,8 @@ fn select_count(file: &FileStats, mode: CountMode) -> u64 {
 /// Finds the effective limit for a file, checking overrides first.
 fn effective_limit(file: &FileStats, config: &Config) -> Option<u64> {
     for ovr in &config.overrides {
-        if let Ok(pat) = Pattern::new(&ovr.pattern)
-            && pat.matches_path(&file.path)
+        if let Ok(glob) = Glob::new(&ovr.pattern)
+            && glob.compile_matcher().is_match(&file.path)
         {
             if ovr.exclude {
                 return None;

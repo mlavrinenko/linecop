@@ -30,6 +30,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Generate a starter .linecop.yaml in the target directory.
+    Init,
     /// Print the JSON Schema for .linecop.yaml configuration.
     Schema,
 }
@@ -38,17 +40,32 @@ fn main() -> ExitCode {
     env_logger::init();
     let cli = Cli::parse();
 
-    if let Some(Command::Schema) = cli.command {
-        match linecop::schema::generate() {
-            Ok(schema) => {
-                print!("{schema}");
-                return ExitCode::SUCCESS;
-            }
-            Err(err) => {
-                eprintln!("error: {err:#}");
-                return ExitCode::FAILURE;
+    match cli.command {
+        Some(Command::Init) => {
+            match linecop::init::create(&cli.path) {
+                Ok(path) => {
+                    println!("Created {path}");
+                    return ExitCode::SUCCESS;
+                }
+                Err(err) => {
+                    eprintln!("error: {err:#}");
+                    return ExitCode::FAILURE;
+                }
             }
         }
+        Some(Command::Schema) => {
+            match linecop::schema::generate() {
+                Ok(schema) => {
+                    print!("{schema}");
+                    return ExitCode::SUCCESS;
+                }
+                Err(err) => {
+                    eprintln!("error: {err:#}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        None => {}
     }
 
     let config_path = cli

@@ -155,3 +155,36 @@ fn version_flag_shows_version() {
         .success()
         .stdout(predicate::str::contains("linecop"));
 }
+
+// --- Init subcommand ---
+
+#[test]
+fn init_creates_config_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    linecop()
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created"));
+
+    let config_path = dir.path().join(".linecop.yaml");
+    assert!(config_path.exists());
+    let contents = std::fs::read_to_string(&config_path).expect("read");
+    assert!(contents.contains("limits:"));
+    assert!(contents.contains("Rust: 500"));
+}
+
+#[test]
+fn init_refuses_to_overwrite_existing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_config(dir.path(), "limits:\n  Rust: 100\n");
+
+    linecop()
+        .arg(dir.path())
+        .arg("init")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}

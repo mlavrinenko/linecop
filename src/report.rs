@@ -1,9 +1,15 @@
 use std::io::Write;
 
+use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use serde::Serialize;
 
 use crate::checker::Violation;
+
+const STYLE_BOLD: Style = Style::new().bold();
+const STYLE_RED: Style = AnsiColor::Red.on_default().bold();
+const STYLE_GREEN: Style = AnsiColor::Green.on_default().bold();
+const STYLE_YELLOW: Style = AnsiColor::Yellow.on_default();
 
 /// Output format for violation reports.
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
@@ -36,21 +42,24 @@ pub fn print(writer: &mut dyn Write, violations: &[Violation], format: Format) -
 }
 
 fn print_text(writer: &mut dyn Write, violations: &[Violation]) -> Result<()> {
+    let reset = anstyle::Reset;
     for vv in violations {
+        let over = vv.lines - vv.limit;
         writeln!(
             writer,
-            "--- {}: {} lines (limit: {})",
+            "{STYLE_RED}---{reset} {STYLE_BOLD}{}{reset}: {} lines (limit: {}, {STYLE_YELLOW}+{over} over{reset})",
             vv.path.display(),
             vv.lines,
-            vv.limit
+            vv.limit,
         )?;
     }
     if violations.is_empty() {
-        writeln!(writer, "All files within size limits.")?;
+        writeln!(writer, "{STYLE_GREEN}All files within size limits.{reset}")?;
     } else {
+        let total_over: u64 = violations.iter().map(|vv| vv.lines - vv.limit).sum();
         writeln!(
             writer,
-            "\n{} file(s) exceed size limits. Consider refactoring.",
+            "\n{STYLE_RED}{} file(s) exceed size limits (+{total_over} lines over).{reset} Consider refactoring.",
             violations.len()
         )?;
     }
@@ -88,11 +97,30 @@ mod tests {
         }
     }
 
+    /// Strip ANSI escape sequences so tests can check semantic content.
+    fn strip_ansi(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        let mut chars = input.chars();
+        while let Some(ch) = chars.next() {
+            if ch == '\x1b' {
+                // Skip until 'm' (end of SGR sequence)
+                for inner in chars.by_ref() {
+                    if inner == 'm' {
+                        break;
+                    }
+                }
+            } else {
+                out.push(ch);
+            }
+        }
+        out
+    }
+
     #[test]
     fn text_format_no_violations() {
         let mut buf = Vec::new();
         print(&mut buf, &[], Format::Text).expect("print");
-        let output = String::from_utf8(buf).expect("utf8");
+        let output = strip_ansi(&String::from_utf8(buf).expect("utf8"));
         assert!(output.contains("All files within size limits"));
     }
 
@@ -104,10 +132,20 @@ mod tests {
         ];
         let mut buf = Vec::new();
         print(&mut buf, &violations, Format::Text).expect("print");
-        let output = String::from_utf8(buf).expect("utf8");
-        assert!(output.contains("--- src/big.rs: 523 lines (limit: 500)"));
-        assert!(output.contains("--- README.md: 250 lines (limit: 200)"));
-        assert!(output.contains("2 file(s) exceed size limits"));
+        let output = strip_ansi(&String::from_utf8(buf).expect("utf8"));
+        assert!(output.contains("--- src/big.rs: 523 lines (limit: 500, +23 over)"));
+        assert!(output.contains("--- README.md: 250 lines (limit: 200, +50 over)"));
+        assert!(output.contains("2 file(s) exceed size limits (+73 lines over)"));
+    }
+
+    #[test]
+    fn text_format_includes_ansi_codes() {
+        let violations = vec![make_violation("a.rs", "Rust", 10, 5)];
+        let mut buf = Vec::new();
+        print(&mut buf, &violations, Format::Text).expect("print");
+        let raw = String::from_utf8(buf).expect("utf8");
+        // Raw output should contain ANSI escape sequences
+        assert!(raw.contains("\x1b["));
     }
 
     #[test]

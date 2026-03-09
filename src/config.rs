@@ -92,7 +92,7 @@ pub fn validate(config: &Config) -> Result<()> {
             );
         }
         // Validate that the glob pattern compiles
-        glob::Pattern::new(&ovr.pattern).with_context(|| {
+        globset::Glob::new(&ovr.pattern).with_context(|| {
             format!(
                 "invalid glob pattern in override #{}: {:?}",
                 idx + 1,

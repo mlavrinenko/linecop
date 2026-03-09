@@ -1,6 +1,7 @@
 pub mod checker;
 pub mod config;
 pub mod counter;
+pub mod init;
 pub mod report;
 pub mod schema;
 
@@ -27,7 +28,7 @@ pub fn run(root: &Path, config_path: &Path, quiet: bool, format: Format) -> Resu
     let violations = checker::check(&files, &cfg);
 
     if !quiet {
-        let mut stdout = std::io::stdout().lock();
+        let mut stdout = anstream::stdout().lock();
         report::print(&mut stdout, &violations, format)?;
     }
 
