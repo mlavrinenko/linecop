@@ -370,15 +370,11 @@ footer a { color: var(--amber); }
         <span class="terminal-title">violation report</span>
       </div>
       <div class="terminal-body">
-<pre><span class="prompt">$</span> <span class="cmd">linecop src/</span>
+<pre><span class="prompt">$</span> <span class="cmd">linecop</span>
+<span class="violation">---</span> <span class="file-path">src/handlers/api.rs</span>: <span class="violation">612</span> lines (limit: 500, <span class="warn">+112 over</span>)
+<span class="violation">---</span> <span class="file-path">src/models/schema.rs</span>: <span class="violation">534</span> lines (limit: 500, <span class="warn">+34 over</span>)
 
-<span class="violation">VIOLATION</span> <span class="file-path">src/handlers/api.rs</span>
-  <span class="dim">language:</span> Rust  <span class="dim">lines:</span> <span class="violation">612</span> / 500  <span class="dim">mode:</span> total
-
-<span class="violation">VIOLATION</span> <span class="file-path">src/models/schema.rs</span>
-  <span class="dim">language:</span> Rust  <span class="dim">lines:</span> <span class="violation">534</span> / 500  <span class="dim">mode:</span> total
-
-<span class="warn">2 violations</span> <span class="dim">in 47 files scanned</span></pre>
+<span class="violation">2 file(s) exceed size limits (+146 lines over).</span> Consider refactoring.</pre>
       </div>
     </div>
 
@@ -391,9 +387,8 @@ footer a { color: var(--amber); }
         <span class="terminal-title">clean run</span>
       </div>
       <div class="terminal-body">
-<pre><span class="prompt">$</span> <span class="cmd">linecop src/</span>
-
-<span class="ok">All clear.</span> <span class="dim">47 files scanned, 0 violations.</span></pre>
+<pre><span class="prompt">$</span> <span class="cmd">linecop</span>
+<span class="ok">All files within size limits.</span></pre>
       </div>
     </div>
   </div>
@@ -512,13 +507,13 @@ exclude_dirs:
       </div>
       <div class="terminal-body">
 <pre><span class="prompt">$</span> <span class="cmd">linecop init</span>
-<span class="ok">Created .linecop.yaml</span>
+<span class="ok">Created ./.linecop.yaml</span>
 
 <span class="prompt">$</span> <span class="cmd">linecop</span>
-<span class="ok">All clear.</span> <span class="dim">23 files scanned, 0 violations.</span>
+<span class="ok">All files within size limits.</span>
 
 <span class="prompt">$</span> <span class="cmd">linecop --format json --quiet</span>
-<span class="dim">{"violations":[],"summary":{"files_scanned":23,"violations":0}}</span></pre>
+<span class="dim">[]</span></pre>
       </div>
     </div>
   </div>
