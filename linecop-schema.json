@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "description": "Top-level configuration for linecop.",
+  "type": "object",
+  "properties": {
+    "count_mode": {
+      "description": "What to count: \"total\" (default), \"code\", \"code-comments\".",
+      "$ref": "#/$defs/CountMode",
+      "default": "total"
+    },
+    "limits": {
+      "description": "Per-language line limits. Keys are tokei language names (e.g. \"Rust\", \"Python\").",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0
+      }
+    },
+    "overrides": {
+      "description": "Per-path overrides applied in order.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Override"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "limits"
+  ],
+  "$defs": {
+    "CountMode": {
+      "description": "What lines to count when checking limits.",
+      "oneOf": [
+        {
+          "description": "Count all lines (code + comments + blanks).",
+          "type": "string",
+          "const": "total"
+        },
+        {
+          "description": "Count only code lines.",
+          "type": "string",
+          "const": "code"
+        },
+        {
+          "description": "Count code + comment lines (exclude blanks).",
+          "type": "string",
+          "const": "code-comments"
+        }
+      ]
+    },
+    "Override": {
+      "description": "A per-path override rule.",
+      "type": "object",
+      "properties": {
+        "exclude": {
+          "description": "If true, matched files are excluded from checking.",
+          "type": "boolean",
+          "default": false
+        },
+        "limit": {
+          "description": "Custom line limit for matched files.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "pattern": {
+          "description": "Glob pattern to match file paths.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "pattern"
+      ]
+    }
+  }
+}

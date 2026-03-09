@@ -1,5 +1,4 @@
 /.direnv
 /target
-linecop-schema.json
 !AGENT.md
 !CLAUDE.md
