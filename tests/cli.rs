@@ -94,7 +94,7 @@ fn json_format_outputs_valid_json() {
 // --- Error cases ---
 
 #[test]
-fn missing_config_exits_nonzero() {
+fn missing_explicit_config_exits_nonzero() {
     linecop()
         .arg("--config")
         .arg("/nonexistent/config.yaml")
@@ -115,6 +115,39 @@ fn nonexistent_scan_path_exits_nonzero() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("scan path does not exist"));
+}
+
+// --- Configless mode ---
+
+#[test]
+fn no_config_runs_with_default_limit_and_warning() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    // Create a small file — should pass with 500-line default
+    let rs_path = dir.path().join("hello.rs");
+    std::fs::write(&rs_path, "fn main() {}\n").expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("no .linecop.yaml found"))
+        .stdout(predicate::str::contains("All files within size limits"));
+}
+
+#[test]
+fn no_config_warning_suppressed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    let rs_path = dir.path().join("hello.rs");
+    std::fs::write(&rs_path, "fn main() {}\n").expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--no-config-warning")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
 }
 
 // --- Subcommands ---

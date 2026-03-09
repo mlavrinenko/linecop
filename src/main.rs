@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+use linecop::RunOptions;
 use linecop::report::Format;
 
 #[derive(Parser)]
@@ -16,7 +17,7 @@ struct Cli {
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Path to the config file (default: <PATH>/.linecop.yaml).
+    /// Path to the config file (default: auto-detected).
     #[arg(short, long)]
     config: Option<PathBuf>,
 
@@ -31,6 +32,10 @@ struct Cli {
     /// Control color output.
     #[arg(long, value_enum, default_value = "auto")]
     color: clap::ColorChoice,
+
+    /// Suppress the warning when no config file is found.
+    #[arg(long)]
+    no_config_warning: bool,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -73,9 +78,14 @@ fn main() -> ExitCode {
         None => {}
     }
 
-    let config_path = cli.config.unwrap_or_else(|| cli.path.join(".linecop.yaml"));
+    let opts = RunOptions {
+        config_path: cli.config.as_deref(),
+        quiet: cli.quiet,
+        format: cli.format,
+        no_config_warning: cli.no_config_warning,
+    };
 
-    match linecop::run(&cli.path, &config_path, cli.quiet, cli.format) {
+    match linecop::run(&cli.path, &opts) {
         Ok(true) => ExitCode::FAILURE,
         Ok(false) => ExitCode::SUCCESS,
         Err(err) => {

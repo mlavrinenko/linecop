@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokei::LanguageType;
+
+/// The default line limit applied to all languages when no config file is found.
+pub const DEFAULT_LIMIT: u64 = 500;
 
 /// What lines to count when checking limits.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
@@ -54,6 +57,46 @@ pub struct Config {
     /// Directory names to exclude from scanning (default: ["target"]).
     #[serde(default = "default_exclude_dirs")]
     pub exclude_dirs: Vec<String>,
+    /// Fallback limit for languages not listed in `limits`.
+    /// Used when running without a config file.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub default_limit: Option<u64>,
+}
+
+impl Config {
+    /// Creates a sensible default config (no per-language limits, 500-line
+    /// default for every file).
+    #[must_use]
+    pub fn fallback() -> Self {
+        Self {
+            count_mode: CountMode::default(),
+            limits: BTreeMap::new(),
+            overrides: Vec::new(),
+            exclude_dirs: default_exclude_dirs(),
+            default_limit: Some(DEFAULT_LIMIT),
+        }
+    }
+}
+
+/// Searches for `.linecop.yaml` starting from `start` and traversing up,
+/// stopping at `stop` (inclusive). Returns the first path found, or `None`.
+#[must_use]
+pub fn find_config(start: &Path, stop: &Path) -> Option<PathBuf> {
+    let mut dir = start.to_path_buf();
+    loop {
+        let candidate = dir.join(".linecop.yaml");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        if dir == stop {
+            break;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
 }
 
 /// Loads and validates a config from the given YAML file.
@@ -194,6 +237,54 @@ overrides:
     fn load_missing_file() {
         let result = load(std::path::Path::new("/nonexistent/.linecop.yaml"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn find_config_in_same_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cfg = dir.path().join(".linecop.yaml");
+        std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
+        let found = super::find_config(dir.path(), dir.path());
+        assert_eq!(found, Some(cfg));
+    }
+
+    #[test]
+    fn find_config_traverses_up() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sub = dir.path().join("a").join("b");
+        std::fs::create_dir_all(&sub).expect("mkdir");
+        let cfg = dir.path().join(".linecop.yaml");
+        std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
+        let found = super::find_config(&sub, dir.path());
+        assert_eq!(found, Some(cfg));
+    }
+
+    #[test]
+    fn find_config_stops_at_boundary() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let parent = dir.path().join("parent");
+        let child = parent.join("child");
+        std::fs::create_dir_all(&child).expect("mkdir");
+        // Place config above the stop boundary
+        let cfg = dir.path().join(".linecop.yaml");
+        std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
+        // Search from child, stop at parent — should NOT find config in dir
+        let found = super::find_config(&child, &parent);
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_config_returns_none_when_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let found = super::find_config(dir.path(), dir.path());
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn fallback_config_has_default_limit() {
+        let cfg = Config::fallback();
+        assert!(cfg.limits.is_empty());
+        assert_eq!(cfg.default_limit, Some(super::DEFAULT_LIMIT));
     }
 
     #[test]

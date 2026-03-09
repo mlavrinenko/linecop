@@ -38,21 +38,29 @@ fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
 }
 
 /// Counts lines for all files under `root` that match languages in the config.
+/// When `limits` is empty (configless mode), all languages are scanned.
 ///
 /// # Errors
 ///
 /// Returns an error if a language name in the config is not recognized by tokei.
 pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
-    let types: Vec<LanguageType> = config
-        .limits
-        .keys()
-        .map(|name| {
-            LanguageType::from_str(name).map_err(|err| anyhow!("unknown language {name:?}: {err}"))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let types: Option<Vec<LanguageType>> = if config.limits.is_empty() {
+        None
+    } else {
+        Some(
+            config
+                .limits
+                .keys()
+                .map(|name| {
+                    LanguageType::from_str(name)
+                        .map_err(|err| anyhow!("unknown language {name:?}: {err}"))
+                })
+                .collect::<Result<Vec<_>>>()?,
+        )
+    };
 
     let tokei_config = tokei::Config {
-        types: Some(types),
+        types,
         ..tokei::Config::default()
     };
 

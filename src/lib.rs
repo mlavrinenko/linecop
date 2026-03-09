@@ -8,11 +8,24 @@ pub mod schema;
 #[cfg(test)]
 pub(crate) mod test_helpers;
 
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Result, bail};
 
 use crate::report::Format;
+
+/// Options controlling a linecop run.
+pub struct RunOptions<'a> {
+    /// Explicit config path (from `--config`). When `None`, config is discovered automatically.
+    pub config_path: Option<&'a Path>,
+    /// Suppress all stdout output.
+    pub quiet: bool,
+    /// Output format.
+    pub format: Format,
+    /// Suppress the warning printed when no config file is found.
+    pub no_config_warning: bool,
+}
 
 /// Runs the full linecop check pipeline.
 ///
@@ -22,17 +35,36 @@ use crate::report::Format;
 ///
 /// Returns an error if the root path does not exist, the config cannot be loaded,
 /// counting fails, or output fails.
-pub fn run(root: &Path, config_path: &Path, quiet: bool, format: Format) -> Result<bool> {
+pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
     if !root.exists() {
         bail!("scan path does not exist: {}", root.display());
     }
-    let cfg = config::load(config_path)?;
+
+    let root_abs = std::path::absolute(root)?;
+    let cwd = std::env::current_dir()?;
+
+    let cfg = if let Some(explicit) = opts.config_path {
+        config::load(explicit)?
+    } else if let Some(found) = config::find_config(&root_abs, &cwd) {
+        config::load(&found)?
+    } else {
+        if !opts.quiet && !opts.no_config_warning {
+            let mut stderr = anstream::stderr().lock();
+            writeln!(
+                stderr,
+                "warning: no .linecop.yaml found, using default limit of {} lines for all files",
+                config::DEFAULT_LIMIT
+            )?;
+        }
+        config::Config::fallback()
+    };
+
     let files = counter::count(root, &cfg)?;
     let violations = checker::check(&files, &cfg);
 
-    if !quiet {
+    if !opts.quiet {
         let mut stdout = anstream::stdout().lock();
-        report::print(&mut stdout, &violations, format)?;
+        report::print(&mut stdout, &violations, opts.format)?;
     }
 
     Ok(!violations.is_empty())
@@ -40,25 +72,33 @@ pub fn run(root: &Path, config_path: &Path, quiet: bool, format: Format) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::{RunOptions, run};
     use crate::report::Format;
     use std::io::Write;
+    use std::path::Path;
+
+    fn opts_with_config(path: &Path) -> RunOptions<'_> {
+        RunOptions {
+            config_path: Some(path),
+            quiet: true,
+            format: Format::Text,
+            no_config_warning: true,
+        }
+    }
 
     #[test]
     fn run_with_valid_config_no_violations() {
         let dir = tempfile::tempdir().expect("tempdir");
 
-        // Create a small Rust file
         let rs_path = dir.path().join("hello.rs");
         let mut file = std::fs::File::create(&rs_path).expect("create");
         writeln!(file, "fn main() {{}}").expect("write");
 
-        // Create config
         let cfg_path = dir.path().join(".linecop.yaml");
         let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
         write!(cfg_file, "limits:\n  Rust: 500\n").expect("write");
 
-        let has_violations = run(dir.path(), &cfg_path, true, Format::Text).expect("run");
+        let has_violations = run(dir.path(), &opts_with_config(&cfg_path)).expect("run");
         assert!(!has_violations);
     }
 
@@ -66,39 +106,56 @@ mod tests {
     fn run_with_violations() {
         let dir = tempfile::tempdir().expect("tempdir");
 
-        // Create a Rust file with 5 lines
         let rs_path = dir.path().join("big.rs");
         let mut file = std::fs::File::create(&rs_path).expect("create");
         for ii in 0..5 {
             writeln!(file, "fn f{ii}() {{}}").expect("write");
         }
 
-        // Config with limit of 3
         let cfg_path = dir.path().join(".linecop.yaml");
         let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
         write!(cfg_file, "limits:\n  Rust: 3\n").expect("write");
 
-        let has_violations = run(dir.path(), &cfg_path, true, Format::Text).expect("run");
+        let has_violations = run(dir.path(), &opts_with_config(&cfg_path)).expect("run");
         assert!(has_violations);
     }
 
     #[test]
-    fn run_missing_config() {
+    fn run_missing_explicit_config() {
         let dir = tempfile::tempdir().expect("tempdir");
         let cfg_path = dir.path().join(".linecop.yaml");
-        let result = run(dir.path(), &cfg_path, true, Format::Text);
+        let result = run(dir.path(), &opts_with_config(&cfg_path));
         assert!(result.is_err());
     }
 
     #[test]
+    fn run_no_config_uses_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        // Small file — should pass with 500-line default
+        let rs_path = dir.path().join("hello.rs");
+        let mut file = std::fs::File::create(&rs_path).expect("create");
+        writeln!(file, "fn main() {{}}").expect("write");
+
+        let opts = RunOptions {
+            config_path: None,
+            quiet: true,
+            format: Format::Text,
+            no_config_warning: true,
+        };
+        let has_violations = run(dir.path(), &opts).expect("run");
+        assert!(!has_violations);
+    }
+
+    #[test]
     fn run_nonexistent_root_path() {
-        let cfg_path = std::path::Path::new(".linecop.yaml");
-        let result = run(
-            std::path::Path::new("/nonexistent/path"),
-            cfg_path,
-            true,
-            Format::Text,
-        );
+        let opts = RunOptions {
+            config_path: None,
+            quiet: true,
+            format: Format::Text,
+            no_config_warning: true,
+        };
+        let result = run(Path::new("/nonexistent/path"), &opts);
         let err = result.expect_err("should fail for nonexistent path");
         assert!(err.to_string().contains("scan path does not exist"));
     }

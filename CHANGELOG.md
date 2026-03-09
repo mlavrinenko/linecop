@@ -20,3 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--color` flag for explicit color control
 - JSON Schema file with yaml-language-server support
 - Configurable directory exclusions
+- Configless mode: runs with 500-line default when no `.linecop.yaml` is found
+- Upward config search: traverses from scan path to CWD to find `.linecop.yaml`
+- `--no-config-warning` flag to suppress the missing-config warning
+- Landing page (`www/index.html`) and logo (`www/logo.svg`)
+- GitHub Pages deployment workflow (`.github/workflows/pages.yml`)
+
+### Fixed
+
+- `linecop src/` no longer fails when `.linecop.yaml` is in a parent directory

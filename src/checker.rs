@@ -50,7 +50,11 @@ fn effective_limit(
             }
         }
     }
-    config.limits.get(&file.language).copied()
+    config
+        .limits
+        .get(&file.language)
+        .copied()
+        .or(config.default_limit)
 }
 
 /// Checks all files against their limits and returns violations.
@@ -243,6 +247,34 @@ mod tests {
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
         let compiled = compile_overrides(&config);
         assert_eq!(effective_limit(&file, &config, &compiled), None);
+    }
+
+    #[test]
+    fn default_limit_applies_to_unlisted_languages() {
+        let files = vec![make_file("script.py", "Python", 600, 0, 0)];
+        let mut config = make_config(&[], vec![], CountMode::Total);
+        config.default_limit = Some(500);
+        let violations = check(&files, &config);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].limit, 500);
+    }
+
+    #[test]
+    fn default_limit_overridden_by_language_limit() {
+        let files = vec![make_file("main.rs", "Rust", 350, 0, 0)];
+        let mut config = make_config(&[("Rust", 300)], vec![], CountMode::Total);
+        config.default_limit = Some(500);
+        let violations = check(&files, &config);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].limit, 300);
+    }
+
+    #[test]
+    fn no_default_limit_skips_unlisted_languages() {
+        let files = vec![make_file("script.py", "Python", 1000, 0, 0)];
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let violations = check(&files, &config);
+        assert!(violations.is_empty());
     }
 
     #[test]
