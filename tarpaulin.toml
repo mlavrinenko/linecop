@@ -1,0 +1,8 @@
+[test_config]
+workspace = true
+skip-clean = true
+exclude-files = ["src/main.rs"]
+
+[report]
+fail-under = 70
+output-dir = "target/coverage"

@@ -1,0 +1,4 @@
+/.direnv
+/target
+!AGENT.md
+!CLAUDE.md
