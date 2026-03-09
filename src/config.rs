@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use schemars::JsonSchema;
@@ -45,11 +45,6 @@ pub struct Config {
     /// Per-path overrides applied in order.
     #[serde(default)]
     pub overrides: Vec<Override>,
-}
-
-/// Returns the default config file path.
-pub fn default_path() -> PathBuf {
-    PathBuf::from(".linecop.yaml")
 }
 
 /// Loads and validates a config from the given YAML file.

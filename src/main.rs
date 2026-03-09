@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use linecop::report::Format;
 
 #[derive(Parser)]
-#[command(about = "Patrols your code base to enforce line count limits.")]
+#[command(about = "Patrols your code base to enforce line count limits.", version)]
 struct Cli {
     /// Root directory to scan.
     #[arg(default_value = ".")]
@@ -39,8 +39,16 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     if let Some(Command::Schema) = cli.command {
-        print!("{}", linecop::schema::generate());
-        return ExitCode::SUCCESS;
+        match linecop::schema::generate() {
+            Ok(schema) => {
+                print!("{schema}");
+                return ExitCode::SUCCESS;
+            }
+            Err(err) => {
+                eprintln!("error: {err:#}");
+                return ExitCode::FAILURE;
+            }
+        }
     }
 
     match linecop::run(&cli.path, &cli.config, cli.quiet, cli.format) {

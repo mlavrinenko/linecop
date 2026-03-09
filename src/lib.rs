@@ -6,7 +6,7 @@ pub mod schema;
 
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use crate::report::Format;
 
@@ -16,8 +16,12 @@ use crate::report::Format;
 ///
 /// # Errors
 ///
-/// Returns an error if the config cannot be loaded, counting fails, or output fails.
+/// Returns an error if the root path does not exist, the config cannot be loaded,
+/// counting fails, or output fails.
 pub fn run(root: &Path, config_path: &Path, quiet: bool, format: Format) -> Result<bool> {
+    if !root.exists() {
+        bail!("scan path does not exist: {}", root.display());
+    }
     let cfg = config::load(config_path)?;
     let files = counter::count(root, &cfg)?;
     let violations = checker::check(&files, &cfg);
@@ -80,5 +84,13 @@ mod tests {
         let cfg_path = dir.path().join(".linecop.yaml");
         let result = run(dir.path(), &cfg_path, true, Format::Text);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_nonexistent_root_path() {
+        let cfg_path = std::path::Path::new(".linecop.yaml");
+        let result = run(std::path::Path::new("/nonexistent/path"), cfg_path, true, Format::Text);
+        let err = result.expect_err("should fail for nonexistent path");
+        assert!(err.to_string().contains("scan path does not exist"));
     }
 }
