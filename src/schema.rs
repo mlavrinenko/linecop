@@ -1,5 +1,31 @@
 use anyhow::Result;
+use schemars::SchemaGenerator;
 use schemars::schema_for;
+
+/// Builds a JSON Schema for the `limits` map whose keys are constrained
+/// to the set of language names known to tokei.
+pub(crate) fn language_limits_schema(generator: &mut SchemaGenerator) -> schemars::Schema {
+    let value_schema = generator.subschema_for::<u64>();
+
+    let names: Vec<serde_json::Value> = tokei::LanguageType::list()
+        .iter()
+        .map(|(lt, _)| serde_json::Value::String(lt.name().to_owned()))
+        .collect();
+
+    let mut schema: schemars::Schema = serde_json::json!({
+        "description": "Per-language line limits. Keys are tokei language names (e.g. \"Rust\", \"Python\").",
+        "type": "object",
+        "propertyNames": { "enum": names },
+        "additionalProperties": value_schema.as_value(),
+    })
+    .try_into()
+    .expect("valid schema object");
+
+    // Drop the nested $defs that subschema_for may have produced — the
+    // top-level schema already carries definitions.
+    schema.remove("$defs");
+    schema
+}
 
 /// Generates a JSON Schema string for the linecop config format.
 ///
@@ -37,6 +63,21 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&output).expect("valid json");
         let props = parsed.get("properties").expect("properties");
         assert!(props.get("count_mode").is_some());
+    }
+
+    #[test]
+    fn limits_property_names_constrained_to_tokei_languages() {
+        let output = generate().expect("generate");
+        let parsed: serde_json::Value = serde_json::from_str(&output).expect("valid json");
+        let limits = parsed
+            .pointer("/properties/limits/propertyNames/enum")
+            .expect("propertyNames enum");
+        let names = limits.as_array().expect("array");
+        assert!(names.len() > 100, "should list many languages");
+        let has = |name: &str| names.iter().any(|v| v.as_str() == Some(name));
+        assert!(has("Rust"), "should contain Rust");
+        assert!(has("Python"), "should contain Python");
+        assert!(has("JavaScript"), "should contain JavaScript");
     }
 
     #[test]

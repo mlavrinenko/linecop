@@ -46,6 +46,7 @@ pub struct Config {
     #[serde(default)]
     pub count_mode: CountMode,
     /// Per-language line limits. Keys are tokei language names (e.g. "Rust", "Python").
+    #[schemars(schema_with = "crate::schema::language_limits_schema")]
     pub limits: BTreeMap<String, u64>,
     /// Per-path overrides applied in order.
     #[serde(default)]
