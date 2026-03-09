@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LineCop - Language-aware file size linter</title>
+<meta name="description" content="Patrols your code base to enforce per-language line count limits. Powered by tokei.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --bg-surface: #0f1322;
+  --bg-card: #141929;
+  --text: #e8e6df;
+  --text-dim: #7a7869;
+  --amber: #ffc107;
+  --amber-light: #ffd54f;
+  --amber-dark: #ff8f00;
+  --red: #ff5252;
+  --green: #66bb6a;
+  --blue: #42a5f5;
+  --caution-yellow: #ffd600;
+  --caution-black: #1a1a1a;
+  --terminal-bg: #08090f;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", "Courier New", monospace;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Caution tape stripe background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 40px,
+    rgba(255, 193, 7, 0.015) 40px,
+    rgba(255, 193, 7, 0.015) 42px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scanline overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 193, 7, 0.008) 2px,
+    rgba(255, 193, 7, 0.008) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+a { color: var(--amber); text-decoration: none; transition: text-shadow 0.2s; }
+a:hover { text-shadow: 0 0 8px var(--amber); }
+
+code {
+  background: var(--bg-surface);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  border: 1px solid rgba(255, 193, 7, 0.15);
+}
+
+/* ==================== LAYOUT ==================== */
+
+.container { max-width: 960px; margin: 0 auto; padding: 0 1.5rem; position: relative; z-index: 1; }
+
+section { padding: 3rem 0; }
+
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, var(--amber), var(--amber-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ==================== HERO ==================== */
+
+.hero {
+  text-align: center;
+  padding: 4rem 0 2rem;
+}
+
+.hero-logo {
+  width: 96px;
+  height: 96px;
+  margin-bottom: 1.2rem;
+  filter: drop-shadow(0 0 16px rgba(255, 193, 7, 0.3));
+}
+
+.hero h1 {
+  font-size: 3.2rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--amber-dark), var(--amber), var(--amber-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.4rem;
+}
+
+.hero .tagline {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  max-width: 540px;
+  margin: 0 auto 1.5rem;
+}
+
+.hero .tagline a { color: var(--amber); }
+
+/* Badge-style detail */
+.hero-badge {
+  display: inline-block;
+  padding: 0.3rem 1rem;
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--amber);
+  opacity: 0.7;
+}
+
+/* ==================== CAUTION TAPE SEPARATOR ==================== */
+
+.caution-tape {
+  height: 6px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--caution-yellow),
+    var(--caution-yellow) 10px,
+    var(--caution-black) 10px,
+    var(--caution-black) 20px
+  );
+  opacity: 0.35;
+  margin: 1rem 0;
+}
+
+/* ==================== TERMINAL WINDOW ==================== */
+
+.terminal {
+  background: var(--terminal-bg);
+  border: 1px solid #1e2235;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 193, 7, 0.04);
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #111528;
+  border-bottom: 1px solid #1e2235;
+}
+
+.terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+.terminal-dot.red { background: #ff5f57; }
+.terminal-dot.yellow { background: #febc2e; }
+.terminal-dot.green { background: #28c840; }
+
+.terminal-title {
+  margin-left: 8px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.terminal-body {
+  padding: 1rem 1.2rem;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.terminal-body pre {
+  margin: 0;
+  background: transparent !important;
+  padding: 0 !important;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.prompt { color: var(--green); }
+.cmd { color: var(--text); }
+.violation { color: var(--red); }
+.ok { color: var(--green); }
+.dim { color: var(--text-dim); }
+.warn { color: var(--amber); }
+.file-path { color: var(--blue); }
+
+/* ==================== TABS ==================== */
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #1e2235;
+  background: #111528;
+}
+
+.tab {
+  padding: 8px 16px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ==================== FEATURES GRID ==================== */
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid #1e2235;
+  border-radius: 6px;
+  padding: 1.2rem;
+  transition: border-color 0.3s;
+}
+
+.feature-card:hover { border-color: var(--amber); }
+
+.feature-card h3 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--amber);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feature-card p {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ==================== INSTALL ==================== */
+
+.install-panel {
+  background: var(--terminal-bg);
+  border: 1px solid #1e2235;
+  border-radius: 0 0 8px 8px;
+  padding: 1rem 1.2rem;
+  font-size: 0.78rem;
+}
+
+.install-panel code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+}
+
+.install-cmd {
+  display: block;
+  padding: 0.3rem 0;
+  color: var(--text);
+}
+
+.install-comment {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+/* ==================== CONFIG EXAMPLE ==================== */
+
+.config-example pre {
+  background: var(--terminal-bg) !important;
+  border: 1px solid #1e2235;
+  border-radius: 8px;
+  padding: 1rem 1.2rem !important;
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+/* ==================== FOOTER ==================== */
+
+footer {
+  text-align: center;
+  padding: 2rem 0;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  position: relative;
+  z-index: 1;
+}
+
+footer a { color: var(--amber); }
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 600px) {
+  .hero h1 { font-size: 2.2rem; }
+  .hero-logo { width: 72px; height: 72px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .terminal-body { font-size: 0.7rem; }
+  .section-title { font-size: 1.3rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="container">
+    <img src="logo.svg" alt="LineCop logo" class="hero-logo">
+    <h1>LineCop</h1>
+    <p class="tagline">
+      Language-aware file size linter. Patrols your code base to enforce
+      per-language line count limits using
+      <a href="https://github.com/XAMPPRocky/tokei">tokei</a>.
+    </p>
+    <span class="hero-badge">keep files in line</span>
+  </div>
+</section>
+
+<div class="container"><div class="caution-tape"></div></div>
+
+<!-- ==================== DEMO ==================== -->
+<section>
+  <div class="container">
+    <h2 class="section-title">On Patrol</h2>
+
+    <!-- Violation run -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">violation report</span>
+      </div>
+      <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">linecop src/</span>
+
+<span class="violation">VIOLATION</span> <span class="file-path">src/handlers/api.rs</span>
+  <span class="dim">language:</span> Rust  <span class="dim">lines:</span> <span class="violation">612</span> / 500  <span class="dim">mode:</span> total
+
+<span class="violation">VIOLATION</span> <span class="file-path">src/models/schema.rs</span>
+  <span class="dim">language:</span> Rust  <span class="dim">lines:</span> <span class="violation">534</span> / 500  <span class="dim">mode:</span> total
+
+<span class="warn">2 violations</span> <span class="dim">in 47 files scanned</span></pre>
+      </div>
+    </div>
+
+    <!-- Clean run -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">clean run</span>
+      </div>
+      <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">linecop src/</span>
+
+<span class="ok">All clear.</span> <span class="dim">47 files scanned, 0 violations.</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container"><div class="caution-tape"></div></div>
+
+<!-- ==================== FEATURES ==================== -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Feature Highlights</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Language-Aware</h3>
+        <p>Powered by tokei, LineCop recognizes 200+ languages. Set limits per language &mdash; 500 lines for Rust, 200 for Markdown, 400 for Python.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Flexible Counting</h3>
+        <p>Count total lines, code-only, or code + comments. Choose the mode that matches your team&rsquo;s conventions.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Glob Overrides</h3>
+        <p>Need a higher limit for generated files? Exclude vendor code? Per-file glob patterns let you fine-tune enforcement.</p>
+      </div>
+      <div class="feature-card">
+        <h3>JSON Schema</h3>
+        <p>Run <code>linecop schema</code> to get a JSON Schema for your config. Editor auto-completion in VS Code, Zed, and more.</p>
+      </div>
+      <div class="feature-card">
+        <h3>CI-Ready</h3>
+        <p>Use <code>--quiet --format json</code> for machine-readable output. Non-zero exit code on violations, perfect for CI gates.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Zero Config Start</h3>
+        <p>Run <code>linecop init</code> to generate a starter <code>.linecop.yaml</code> with sensible defaults. Tweak from there.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container"><div class="caution-tape"></div></div>
+
+<!-- ==================== CONFIG ==================== -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Configuration</h2>
+    <div class="config-example">
+<pre><code class="language-yaml"># .linecop.yaml
+limits:
+  Rust: 500
+  Markdown: 200
+  Python: 400
+
+count_mode: total  # total | code | code-comments
+
+overrides:
+  - pattern: "src/generated_*.rs"
+    limit: 1000
+  - pattern: "RESEARCH.md"
+    exclude: true
+
+exclude_dirs:
+  - target
+  - node_modules</code></pre>
+    </div>
+  </div>
+</section>
+
+<div class="container"><div class="caution-tape"></div></div>
+
+<!-- ==================== INSTALL ==================== -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Install</h2>
+
+    <div class="terminal" style="overflow: visible;">
+      <div class="tab-bar" role="tablist">
+        <button class="tab active" data-target="install-cargo" role="tab">cargo</button>
+        <button class="tab" data-target="install-nix" role="tab">nix</button>
+        <button class="tab" data-target="install-binary" role="tab">binary</button>
+      </div>
+
+      <div id="install-cargo" class="tab-panel active install-panel">
+        <span class="install-cmd"><span class="prompt">$</span> cargo install linecop</span>
+      </div>
+
+      <div id="install-nix" class="tab-panel install-panel">
+        <span class="install-comment"># Run without installing</span>
+        <span class="install-cmd"><span class="prompt">$</span> nix run github:mlavrinenko/linecop</span>
+        <br>
+        <span class="install-comment"># Or add to your flake inputs</span>
+        <span class="install-cmd"><span class="dim">linecop.url = "github:mlavrinenko/linecop";</span></span>
+      </div>
+
+      <div id="install-binary" class="tab-panel install-panel">
+        <span class="install-comment"># Download from GitHub Releases</span>
+        <span class="install-cmd"><span class="prompt">$</span> curl -fsSL https://github.com/mlavrinenko/linecop/releases/latest/download/linecop-x86_64-linux.tar.gz | tar xz</span>
+        <span class="install-cmd"><span class="prompt">$</span> ./linecop --version</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container"><div class="caution-tape"></div></div>
+
+<!-- ==================== QUICK START ==================== -->
+<section>
+  <div class="container">
+    <h2 class="section-title">Quick Start</h2>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">getting started</span>
+      </div>
+      <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">linecop init</span>
+<span class="ok">Created .linecop.yaml</span>
+
+<span class="prompt">$</span> <span class="cmd">linecop</span>
+<span class="ok">All clear.</span> <span class="dim">23 files scanned, 0 violations.</span>
+
+<span class="prompt">$</span> <span class="cmd">linecop --format json --quiet</span>
+<span class="dim">{"violations":[],"summary":{"files_scanned":23,"violations":0}}</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<div class="container"><div class="caution-tape"></div></div>
+
+<footer>
+  <div class="container">
+    <p>
+      <a href="https://github.com/mlavrinenko/linecop">GitHub</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://crates.io/crates/linecop">crates.io</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/mlavrinenko/linecop/blob/main/CHANGELOG.md">Changelog</a>
+      &nbsp;&middot;&nbsp;
+      MIT License
+    </p>
+  </div>
+</footer>
+
+<!-- Syntax highlighting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+<!-- Tab switcher -->
+<script>
+(function() {
+  document.querySelectorAll(".tab-bar").forEach(function(bar) {
+    bar.querySelectorAll(".tab").forEach(function(tab) {
+      tab.addEventListener("click", function() {
+        bar.querySelectorAll(".tab").forEach(function(t) { t.classList.remove("active"); });
+        tab.classList.add("active");
+        var parent = bar.closest(".terminal");
+        parent.querySelectorAll(".tab-panel").forEach(function(p) { p.classList.remove("active"); });
+        var target = parent.querySelector("#" + tab.getAttribute("data-target"));
+        if (target) target.classList.add("active");
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
