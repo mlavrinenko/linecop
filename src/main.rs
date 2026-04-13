@@ -44,7 +44,15 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Generate a starter .linecop.yaml in the target directory.
-    Init,
+    Init {
+        /// Custom schema URL to embed in the config file.
+        #[arg(long)]
+        schema: Option<String>,
+
+        /// Do not embed a yaml-language-server schema comment.
+        #[arg(long)]
+        no_schema: bool,
+    },
     /// Print the JSON Schema for .linecop.yaml configuration.
     Schema,
 }
@@ -73,7 +81,16 @@ fn main() -> ExitCode {
     .write_global();
 
     match cli.command {
-        Some(Command::Init) => return run_subcommand(linecop::init::create(&cli.path)),
+        Some(Command::Init { schema, no_schema }) => {
+            let mode = if no_schema {
+                linecop::init::SchemaMode::None
+            } else if let Some(url) = schema {
+                linecop::init::SchemaMode::Custom(url)
+            } else {
+                linecop::init::SchemaMode::Default
+            };
+            return run_subcommand(linecop::init::create(&cli.path, &mode));
+        }
         Some(Command::Schema) => return run_subcommand(linecop::schema::generate()),
         None => {}
     }

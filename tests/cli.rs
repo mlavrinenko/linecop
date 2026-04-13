@@ -191,7 +191,7 @@ fn version_flag_shows_version() {
 // --- Init subcommand ---
 
 #[test]
-fn init_creates_config_file() {
+fn init_creates_config_file_with_schema() {
     let dir = tempfile::tempdir().expect("tempdir");
 
     linecop()
@@ -204,8 +204,25 @@ fn init_creates_config_file() {
     let config_path = dir.path().join(".linecop.yaml");
     assert!(config_path.exists());
     let contents = std::fs::read_to_string(&config_path).expect("read");
+    assert!(contents.starts_with("# yaml-language-server: $schema=https://"));
     assert!(contents.contains("limits:"));
     assert!(contents.contains("Rust: 500"));
+}
+
+#[test]
+fn init_no_schema_omits_header() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    linecop()
+        .arg(dir.path())
+        .arg("init")
+        .arg("--no-schema")
+        .assert()
+        .success();
+
+    let contents = std::fs::read_to_string(dir.path().join(".linecop.yaml")).expect("read");
+    assert!(!contents.contains("yaml-language-server"));
+    assert!(contents.starts_with("limits:"));
 }
 
 #[test]
