@@ -391,6 +391,37 @@ footer a { color: var(--amber); }
 <span class="ok">All files within size limits.</span></pre>
       </div>
     </div>
+
+    <!-- Baseline run -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">baseline warning</span>
+      </div>
+      <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">linecop --baseline=90</span>
+<span class="warn">~~~</span> <span class="file-path">src/handlers/api.rs</span>: <span class="warn">480</span> lines (limit: 500, <span class="warn">96% of limit</span>)
+
+<span class="warn">1 file(s) reported.</span> Consider refactoring.</pre>
+      </div>
+    </div>
+
+    <!-- Paths format -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">pipe to other tools</span>
+      </div>
+      <div class="terminal-body">
+<pre><span class="prompt">$</span> <span class="cmd">linecop --baseline=90 --format=paths | ejectest apply src/ --files-from -</span>
+<span class="file-path">src/handlers/api.rs</span>
+<span class="dim">Ejecting tests from 1 file...</span></pre>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -420,6 +451,14 @@ footer a { color: var(--amber); }
       <div class="feature-card">
         <h3>CI-Ready</h3>
         <p>Use <code>--quiet --format json</code> for machine-readable output. Non-zero exit code on violations, perfect for CI gates.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Pipe-Friendly</h3>
+        <p>Use <code>--format=paths</code> to output only file paths, one per line. Perfect for piping to other tools like <code>ejectest</code>.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Early Warning</h3>
+        <p>Use <code>--baseline=90</code> to report files at 90% of their limit. Catch growing files before they become violations.</p>
       </div>
       <div class="feature-card">
         <h3>Zero Config Start</h3>

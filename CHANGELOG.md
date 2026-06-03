@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 - 2026-06-04
+
+### Added
+
+- `--format=paths` output format: prints only violating file paths, one per line,
+  for piping to other tools (e.g. `ejectest apply src/ --files-from -`)
+- `--baseline=<PERCENT>` flag: reports files at or above the given percentage of
+  their limit (1-100). Default is 100 (backward-compatible: only files strictly
+  over the limit)
+- JSON output now includes `baseline-limit` field for each violation
+
 ## 0.2.0 - 2026-04-13
 
 ### Added

@@ -25,6 +25,9 @@ pub struct RunOptions<'a> {
     pub format: Format,
     /// Suppress the warning printed when no config file is found.
     pub no_config_warning: bool,
+    /// Baseline percentage (1-100). Files at or above this percentage of their
+    /// limit are reported. Default: 100 (only files strictly over the limit).
+    pub baseline: u8,
 }
 
 /// Runs the full linecop check pipeline.
@@ -60,7 +63,7 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
     };
 
     let files = counter::count(root, &cfg)?;
-    let violations = checker::check(&files, &cfg);
+    let violations = checker::check(&files, &cfg, opts.baseline);
 
     if !opts.quiet {
         let mut stdout = anstream::stdout().lock();
@@ -83,6 +86,7 @@ mod tests {
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
+            baseline: 100,
         }
     }
 
@@ -142,6 +146,7 @@ mod tests {
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
+            baseline: 100,
         };
         let has_violations = run(dir.path(), &opts).expect("run");
         assert!(!has_violations);
@@ -154,9 +159,35 @@ mod tests {
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
+            baseline: 100,
         };
         let result = run(Path::new("/nonexistent/path"), &opts);
         let err = result.expect_err("should fail for nonexistent path");
         assert!(err.to_string().contains("scan path does not exist"));
+    }
+
+    #[test]
+    fn run_with_baseline() {
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let rs_path = dir.path().join("near.rs");
+        let mut file = std::fs::File::create(&rs_path).expect("create");
+        for ii in 0..4 {
+            writeln!(file, "fn f{ii}() {{}}").expect("write");
+        }
+
+        let cfg_path = dir.path().join(".linecop.yaml");
+        let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
+        write!(cfg_file, "limits:\n  Rust: 5\n").expect("write");
+
+        let opts = RunOptions {
+            config_path: Some(&cfg_path),
+            quiet: true,
+            format: Format::Text,
+            no_config_warning: true,
+            baseline: 80,
+        };
+        let has_violations = run(dir.path(), &opts).expect("run");
+        assert!(has_violations, "4 lines >= 80% of 5 = 4");
     }
 }

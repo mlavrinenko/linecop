@@ -63,7 +63,7 @@ fn violation_exits_nonzero() {
         .arg(&cfg)
         .assert()
         .failure()
-        .stdout(predicate::str::contains("exceed size limits"));
+        .stdout(predicate::str::contains("file(s) reported"));
 }
 
 #[test]
@@ -236,4 +236,139 @@ fn init_refuses_to_overwrite_existing() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("already exists"));
+}
+
+// --- Paths format ---
+
+#[test]
+fn paths_format_outputs_only_paths() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Rust: 2\n");
+
+    let rs_path = dir.path().join("big.rs");
+    std::fs::write(&rs_path, "fn a() {}\nfn b() {}\nfn c() {}\n").expect("write");
+
+    let output = linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--format")
+        .arg("paths")
+        .assert()
+        .failure()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8(output).expect("utf8");
+    assert!(output_str.contains("big.rs"));
+    assert!(!output_str.contains("lines"));
+    assert!(!output_str.contains("limit"));
+}
+
+#[test]
+fn paths_format_no_violations_empty_output() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Rust: 500\n");
+
+    let rs_path = dir.path().join("hello.rs");
+    std::fs::write(&rs_path, "fn main() {}\n").expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--format")
+        .arg("paths")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+// --- Baseline ---
+
+#[test]
+fn baseline_reports_near_limit_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Rust: 5\n");
+
+    let rs_path = dir.path().join("near.rs");
+    std::fs::write(&rs_path, "fn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\n").expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--baseline")
+        .arg("80")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("near.rs"));
+}
+
+#[test]
+fn baseline_default_100_backward_compatible() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Rust: 5\n");
+
+    let rs_path = dir.path().join("exact.rs");
+    std::fs::write(
+        &rs_path,
+        "fn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\nfn e() {}\n",
+    )
+    .expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All files within size limits"));
+}
+
+#[test]
+#[allow(clippy::indexing_slicing)]
+fn baseline_json_includes_baseline_limit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Rust: 5\n");
+
+    let rs_path = dir.path().join("near.rs");
+    std::fs::write(&rs_path, "fn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\n").expect("write");
+
+    let output = linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--baseline")
+        .arg("80")
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .failure()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output).expect("valid json");
+    let arr = parsed.as_array().expect("array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["baseline-limit"], 4);
+}
+
+#[test]
+fn baseline_rejects_invalid_values() {
+    linecop()
+        .arg("--baseline")
+        .arg("0")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
+
+    linecop()
+        .arg("--baseline")
+        .arg("101")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
 }

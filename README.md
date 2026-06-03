@@ -51,10 +51,12 @@ linecop [PATH] <COMMAND>
 
 | Option | Description |
 |--------|-------------|
-| `-c, --config <FILE>` | Config file path (default: `<PATH>/.linecop.yaml`) |
+| `-c, --config <FILE>` | Config file path (default: auto-detected) |
 | `-q, --quiet` | Suppress output (exit code only) |
-| `--format <text\|json>` | Output format (default: `text`) |
+| `--format <text\|json\|paths>` | Output format (default: `text`) |
+| `--baseline <PERCENT>` | Report files at or above this percentage of their limit, 1-100 (default: `100`) |
 | `--color <auto\|always\|never>` | Control color output |
+| `--no-config-warning` | Suppress the warning when no config file is found |
 
 ### Examples
 
@@ -68,9 +70,18 @@ linecop --config my-config.yaml
 # JSON output for CI
 linecop --format json --quiet
 
+# Report files at 90%+ of their limit (early warning)
+linecop --baseline 90
+
+# Paths only, one per line, for piping to other tools
+linecop --baseline 90 --format paths | ejectest apply src/ --files-from -
+
 # Generate JSON Schema for editor validation
 linecop schema > linecop-schema.json
 ```
+
+With `--baseline` below 100, JSON output gains a `baseline-limit` field
+(the effective threshold) alongside `lines` and `limit` for each file.
 
 ## Configuration
 

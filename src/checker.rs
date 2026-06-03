@@ -14,8 +14,10 @@ pub struct Violation {
     pub language: String,
     /// Actual line count (based on count mode).
     pub lines: u64,
-    /// The limit that was exceeded.
+    /// The configured limit for this file.
     pub limit: u64,
+    /// The effective threshold after applying the baseline percentage.
+    pub baseline_limit: u64,
 }
 
 /// A compiled override rule ready for matching.
@@ -59,9 +61,13 @@ fn effective_limit(
 
 /// Checks all files against their limits and returns violations.
 ///
+/// `baseline` is a percentage (1-100). At 100, files are reported only when
+/// they strictly exceed their limit (backward-compatible default). Below 100,
+/// files at or above `baseline` percent of the limit are reported.
+///
 /// Glob patterns from overrides are compiled once upfront for efficiency.
 /// Invalid patterns are skipped (they are validated at config load time).
-pub fn check(files: &[FileStats], config: &Config) -> Vec<Violation> {
+pub fn check(files: &[FileStats], config: &Config, baseline: u8) -> Vec<Violation> {
     let compiled: Vec<CompiledOverride> = config
         .overrides
         .iter()
@@ -78,12 +84,19 @@ pub fn check(files: &[FileStats], config: &Config) -> Vec<Violation> {
     for file in files {
         if let Some(limit) = effective_limit(file, config, &compiled) {
             let lines = select_count(file, config.count_mode);
-            if lines > limit {
+            let threshold = limit * u64::from(baseline) / 100;
+            let exceeded = if baseline == 100 {
+                lines > limit
+            } else {
+                lines >= threshold
+            };
+            if exceeded {
                 violations.push(Violation {
                     path: file.path.clone(),
                     language: file.language.clone(),
                     lines,
                     limit,
+                    baseline_limit: threshold,
                 });
             }
         }
@@ -117,7 +130,7 @@ mod tests {
     fn no_violations_when_within_limits() {
         let files = vec![make_file("src/main.rs", "Rust", 100, 10, 5)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -125,7 +138,7 @@ mod tests {
     fn violation_when_exceeding_limit() {
         let files = vec![make_file("src/big.rs", "Rust", 400, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].lines, 510);
         assert_eq!(violations[0].limit, 500);
@@ -140,7 +153,7 @@ mod tests {
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -153,7 +166,7 @@ mod tests {
             exclude: false,
         }];
         let config = make_config(&[("Rust", 500)], overrides, CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -161,7 +174,7 @@ mod tests {
     fn code_only_mode() {
         let files = vec![make_file("src/main.rs", "Rust", 400, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Code);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -169,7 +182,7 @@ mod tests {
     fn code_comments_mode() {
         let files = vec![make_file("src/main.rs", "Rust", 400, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::CodeComments);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -177,7 +190,7 @@ mod tests {
     fn code_comments_mode_violation() {
         let files = vec![make_file("src/main.rs", "Rust", 450, 60, 50)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::CodeComments);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].lines, 510);
     }
@@ -186,7 +199,7 @@ mod tests {
     fn file_without_matching_language_skipped() {
         let files = vec![make_file("script.py", "Python", 1000, 0, 0)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -206,7 +219,7 @@ mod tests {
             },
         ];
         let config = make_config(&[("Rust", 500)], overrides, CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -254,7 +267,7 @@ mod tests {
         let files = vec![make_file("script.py", "Python", 600, 0, 0)];
         let mut config = make_config(&[], vec![], CountMode::Total);
         config.default_limit = Some(500);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].limit, 500);
     }
@@ -264,7 +277,7 @@ mod tests {
         let files = vec![make_file("main.rs", "Rust", 350, 0, 0)];
         let mut config = make_config(&[("Rust", 300)], vec![], CountMode::Total);
         config.default_limit = Some(500);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].limit, 300);
     }
@@ -273,7 +286,7 @@ mod tests {
     fn no_default_limit_skips_unlisted_languages() {
         let files = vec![make_file("script.py", "Python", 1000, 0, 0)];
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
     }
 
@@ -286,7 +299,43 @@ mod tests {
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
-        let violations = check(&files, &config);
+        let violations = check(&files, &config, 100);
         assert!(violations.is_empty());
+    }
+
+    #[test]
+    fn baseline_reports_near_limit_files() {
+        let files = vec![make_file("src/near.rs", "Rust", 450, 0, 0)];
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let violations = check(&files, &config, 90);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].lines, 450);
+        assert_eq!(violations[0].limit, 500);
+        assert_eq!(violations[0].baseline_limit, 450);
+    }
+
+    #[test]
+    fn baseline_below_threshold_no_violation() {
+        let files = vec![make_file("src/ok.rs", "Rust", 440, 0, 0)];
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let violations = check(&files, &config, 90);
+        assert!(violations.is_empty());
+    }
+
+    #[test]
+    fn baseline_100_backward_compatible() {
+        let files = vec![make_file("src/exact.rs", "Rust", 500, 0, 0)];
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let violations = check(&files, &config, 100);
+        assert!(violations.is_empty(), "exactly at limit should not violate");
+    }
+
+    #[test]
+    fn baseline_50_percent() {
+        let files = vec![make_file("src/half.rs", "Rust", 250, 0, 0)];
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let violations = check(&files, &config, 50);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].baseline_limit, 250);
     }
 }

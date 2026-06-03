@@ -37,6 +37,10 @@ struct Cli {
     #[arg(long)]
     no_config_warning: bool,
 
+    /// Report files at or above this percentage of their limit (1-100).
+    #[arg(long, default_value = "100", value_parser = clap::value_parser!(u8).range(1..=100))]
+    baseline: u8,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -100,6 +104,7 @@ fn main() -> ExitCode {
         quiet: cli.quiet,
         format: cli.format,
         no_config_warning: cli.no_config_warning,
+        baseline: cli.baseline,
     };
 
     match linecop::run(&cli.path, &opts) {
