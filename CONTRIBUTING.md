@@ -29,6 +29,16 @@ coverage, so anything there is untested by default.
 Minimum 70% coverage enforced via `cargo-tarpaulin`. Run `just cover` to check.
 `main.rs` is excluded — keep it thin and move testable logic to `lib.rs`.
 
+Settings live in `tarpaulin.toml`, including `engine = "Llvm"`: the default
+ptrace engine aborts this suite mid-run (`ESRCH: No such process`) instead of
+reporting a number. Keep the value capitalized exactly as tarpaulin spells the
+variant — an unparseable `tarpaulin.toml` is only a warning, after which
+tarpaulin runs with its defaults and no threshold at all. `just cover` fails on
+that warning so the fallback cannot pass silently.
+
+CI runs `just cover` as its own job; `just check` leaves it out, since coverage
+builds use different rustflags and would rebuild the whole tree on every switch.
+
 ## File Size Limits
 
 - Rust files: 500 lines max

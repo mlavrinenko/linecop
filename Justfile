@@ -27,9 +27,19 @@ clippy-fix:
 build:
     cargo build --workspace -q
 
-# Run coverage with tarpaulin
+# Run coverage with tarpaulin (settings live in tarpaulin.toml)
 cover:
-    cargo tarpaulin --workspace --skip-clean
+    #!/usr/bin/env bash
+    set -eo pipefail
+    log=$(mktemp)
+    trap 'rm -f "$log"' EXIT
+    cargo tarpaulin --workspace --skip-clean 2>&1 | tee "$log"
+    # Tarpaulin only warns on a rejected tarpaulin.toml and silently falls back
+    # to its defaults — which drops both the engine and the threshold.
+    if grep -q "Invalid config file" "$log"; then
+        echo "error: tarpaulin.toml was rejected, coverage ran unconfigured" >&2
+        exit 1
+    fi
 
 # Format code
 fmt:

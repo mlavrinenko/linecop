@@ -34,3 +34,26 @@ jobs:
 
       - name: Clippy + tests + file size
         run: just check
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Coverage builds carry their own rustflags, so keep them out of the
+      # check job's cache.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+
+      - uses: extractions/setup-just@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+
+      - name: Coverage threshold
+        run: just cover

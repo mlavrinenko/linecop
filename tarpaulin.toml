@@ -2,6 +2,9 @@
 workspace = true
 skip-clean = true
 exclude-files = ["src/main.rs"]
+# The ptrace engine aborts this suite (ESRCH) on current toolchains; LLVM
+# source-based coverage does not trace the process and is stable here.
+engine = "Llvm"
 
 [report]
 fail-under = 70
