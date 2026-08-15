@@ -23,6 +23,10 @@ pub struct FileStats {
     pub blanks: u64,
 }
 
+/// VCS metadata directories, skipped whenever hidden scanning is enabled —
+/// a line limit over packfiles and object stores is never what was meant.
+const VCS_DIRS: [&str; 4] = [".git", ".hg", ".svn", ".jj"];
+
 /// Recursively sums code stats including nested language blobs.
 fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
     let mut code = stats.code as u64;
@@ -39,6 +43,8 @@ fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
 
 /// Counts lines for all files under `root` that match languages in the config.
 /// When `limits` is empty (configless mode), all languages are scanned.
+/// Dot-prefixed files and directories are skipped unless `include_hidden` is
+/// set, in which case everything but VCS metadata is walked.
 ///
 /// # Errors
 ///
@@ -61,10 +67,14 @@ pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
 
     let tokei_config = tokei::Config {
         types,
+        hidden: Some(config.include_hidden),
         ..tokei::Config::default()
     };
 
-    let exclude_dirs: Vec<&str> = config.exclude_dirs.iter().map(String::as_str).collect();
+    let mut exclude_dirs: Vec<&str> = config.exclude_dirs.iter().map(String::as_str).collect();
+    if config.include_hidden {
+        exclude_dirs.extend(VCS_DIRS);
+    }
 
     let mut languages = Languages::new();
     languages.get_statistics(&[root], &exclude_dirs, &tokei_config);
@@ -152,6 +162,71 @@ mod tests {
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let stats = count(dir.path(), &config).expect("count");
         assert!(stats.is_empty());
+    }
+
+    #[test]
+    fn hidden_dirs_skipped_by_default() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join(".just/scripts")).expect("mkdir");
+        let rs_path = dir.path().join(".just/scripts/build.rs");
+        std::fs::write(&rs_path, "fn build() {}\n").expect("write");
+
+        let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        let stats = count(dir.path(), &config).expect("count");
+        assert!(stats.is_empty(), "dot-directories are invisible by default");
+    }
+
+    #[test]
+    fn include_hidden_scans_dot_dirs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join(".just/scripts")).expect("mkdir");
+        let rs_path = dir.path().join(".just/scripts/build.rs");
+        std::fs::write(&rs_path, "fn build() {}\n").expect("write");
+
+        let mut config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        config.include_hidden = true;
+        let stats = count(dir.path(), &config).expect("count");
+
+        assert_eq!(stats.len(), 1);
+        assert!(stats[0].path.ends_with(".just/scripts/build.rs"));
+    }
+
+    #[test]
+    fn include_hidden_scans_dot_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join(".hidden.rs"), "fn hide() {}\n").expect("write");
+
+        let mut config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        config.include_hidden = true;
+        let stats = count(dir.path(), &config).expect("count");
+        assert_eq!(stats.len(), 1);
+    }
+
+    #[test]
+    fn include_hidden_still_skips_vcs_dirs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join(".git/hooks")).expect("mkdir");
+        std::fs::write(dir.path().join(".git/hooks/pre-commit.rs"), "fn ok() {}\n").expect("write");
+        std::fs::create_dir_all(dir.path().join(".jj")).expect("mkdir");
+        std::fs::write(dir.path().join(".jj/op.rs"), "fn op() {}\n").expect("write");
+
+        let mut config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        config.include_hidden = true;
+        let stats = count(dir.path(), &config).expect("count");
+        assert!(stats.is_empty(), "VCS metadata stays out of the scan");
+    }
+
+    #[test]
+    fn include_hidden_respects_ignore_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join(".ignore"), ".direnv/\n").expect("write");
+        std::fs::create_dir_all(dir.path().join(".direnv")).expect("mkdir");
+        std::fs::write(dir.path().join(".direnv/gen.rs"), "fn gen() {}\n").expect("write");
+
+        let mut config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
+        config.include_hidden = true;
+        let stats = count(dir.path(), &config).expect("count");
+        assert!(stats.is_empty(), "ignored dot-dirs stay skipped");
     }
 
     #[test]

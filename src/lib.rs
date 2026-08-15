@@ -28,6 +28,9 @@ pub struct RunOptions<'a> {
     /// Baseline percentage (1-100). Files at or above this percentage of their
     /// limit are reported. Default: 100 (only files strictly over the limit).
     pub baseline: u8,
+    /// Scan dot-prefixed files and directories, overriding `include_hidden`
+    /// from the config when set.
+    pub hidden: bool,
 }
 
 /// Runs the full linecop check pipeline.
@@ -46,7 +49,7 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
     let root_abs = std::path::absolute(root)?;
     let cwd = std::env::current_dir()?;
 
-    let cfg = if let Some(explicit) = opts.config_path {
+    let mut cfg = if let Some(explicit) = opts.config_path {
         config::load(explicit)?
     } else if let Some(found) = config::find_config(&root_abs, &cwd) {
         config::load(&found)?
@@ -61,6 +64,8 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
         }
         config::Config::fallback()
     };
+
+    cfg.include_hidden |= opts.hidden;
 
     let files = counter::count(root, &cfg)?;
     let violations = checker::check(&files, &cfg, opts.baseline);
@@ -87,6 +92,7 @@ mod tests {
             format: Format::Text,
             no_config_warning: true,
             baseline: 100,
+            hidden: false,
         }
     }
 
@@ -147,6 +153,7 @@ mod tests {
             format: Format::Text,
             no_config_warning: true,
             baseline: 100,
+            hidden: false,
         };
         let has_violations = run(dir.path(), &opts).expect("run");
         assert!(!has_violations);
@@ -160,10 +167,38 @@ mod tests {
             format: Format::Text,
             no_config_warning: true,
             baseline: 100,
+            hidden: false,
         };
         let result = run(Path::new("/nonexistent/path"), &opts);
         let err = result.expect_err("should fail for nonexistent path");
         assert!(err.to_string().contains("scan path does not exist"));
+    }
+
+    #[test]
+    fn hidden_option_overrides_config() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join(".just")).expect("mkdir");
+
+        let rs_path = dir.path().join(".just/big.rs");
+        let mut file = std::fs::File::create(&rs_path).expect("create");
+        for ii in 0..5 {
+            writeln!(file, "fn f{ii}() {{}}").expect("write");
+        }
+
+        let cfg_path = dir.path().join(".linecop.yaml");
+        let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
+        write!(cfg_file, "limits:\n  Rust: 3\n").expect("write");
+
+        assert!(
+            !run(dir.path(), &opts_with_config(&cfg_path)).expect("run"),
+            "config alone leaves the dot-directory unscanned"
+        );
+
+        let opts = RunOptions {
+            hidden: true,
+            ..opts_with_config(&cfg_path)
+        };
+        assert!(run(dir.path(), &opts).expect("run"), "--hidden reaches it");
     }
 
     #[test]
@@ -186,6 +221,7 @@ mod tests {
             format: Format::Text,
             no_config_warning: true,
             baseline: 80,
+            hidden: false,
         };
         let has_violations = run(dir.path(), &opts).expect("run");
         assert!(has_violations, "4 lines >= 80% of 5 = 4");

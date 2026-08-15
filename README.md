@@ -55,6 +55,7 @@ linecop [PATH] <COMMAND>
 | `-q, --quiet` | Suppress output (exit code only) |
 | `--format <text\|json\|paths>` | Output format (default: `text`) |
 | `--baseline <PERCENT>` | Report files at or above this percentage of their limit, 1-100 (default: `100`) |
+| `--hidden` | Scan dot-prefixed files and directories (overrides `include_hidden`) |
 | `--color <auto\|always\|never>` | Control color output |
 | `--no-config-warning` | Suppress the warning when no config file is found |
 
@@ -75,6 +76,9 @@ linecop --baseline 90
 
 # Paths only, one per line, for piping to other tools
 linecop --baseline 90 --format paths | ejectest apply src/ --files-from -
+
+# Include dot-directories such as .just/scripts or .github/scripts
+linecop --hidden
 
 # Generate JSON Schema for editor validation
 linecop schema > linecop-schema.json
@@ -104,9 +108,16 @@ overrides:
 exclude_dirs:
   - target
   - node_modules
+
+include_hidden: false  # scan .just/scripts, .github/scripts, ...
 ```
 
 Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
+
+Dot-prefixed files and directories are skipped unless `include_hidden: true`
+(or `--hidden`) is set. With it on, `.git`, `.hg`, `.svn` and `.jj` stay out of
+the scan, and gitignored paths are still ignored — so a hidden build directory
+gets limits without dragging repository metadata in.
 
 ## Contributing
 

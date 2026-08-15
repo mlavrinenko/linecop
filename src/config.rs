@@ -57,6 +57,11 @@ pub struct Config {
     /// Directory names to exclude from scanning (default: ["target"]).
     #[serde(default = "default_exclude_dirs")]
     pub exclude_dirs: Vec<String>,
+    /// Scan dot-prefixed files and directories such as `.just/scripts`
+    /// (default: false). VCS metadata directories stay excluded, and
+    /// gitignored paths are still skipped.
+    #[serde(default)]
+    pub include_hidden: bool,
     /// Fallback limit for languages not listed in `limits`.
     /// Used when running without a config file.
     #[serde(default)]
@@ -74,6 +79,7 @@ impl Config {
             limits: BTreeMap::new(),
             overrides: Vec::new(),
             exclude_dirs: default_exclude_dirs(),
+            include_hidden: false,
             default_limit: Some(DEFAULT_LIMIT),
         }
     }
@@ -313,6 +319,26 @@ overrides:
         let yaml = "limits:\n  Rust: 500\nexclude_dirs:\n  - vendor\n  - dist\n";
         let config: Config = serde_yml::from_str(yaml).expect("parse");
         assert_eq!(config.exclude_dirs, vec!["vendor", "dist"]);
+    }
+
+    #[test]
+    fn include_hidden_defaults_to_false() {
+        let yaml = "limits:\n  Rust: 500\n";
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
+        assert!(!config.include_hidden);
+    }
+
+    #[test]
+    fn include_hidden_parsed() {
+        let yaml = "limits:\n  Rust: 500\ninclude_hidden: true\n";
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
+        assert!(config.include_hidden);
+        validate(&config).expect("valid");
+    }
+
+    #[test]
+    fn fallback_config_excludes_hidden() {
+        assert!(!Config::fallback().include_hidden);
     }
 
     #[test]

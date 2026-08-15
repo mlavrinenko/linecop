@@ -372,3 +372,71 @@ fn baseline_rejects_invalid_values() {
         .failure()
         .stderr(predicate::str::contains("invalid"));
 }
+
+// --- Hidden directories ---
+
+/// Writes an oversized shell script under a dot-directory, mirroring the
+/// `.just/scripts` layout that first exposed the blind spot. Returns the path
+/// only after confirming the file landed — a gate assertion against a file that
+/// was never written proves nothing.
+fn write_hidden_probe(dir: &std::path::Path) -> std::path::PathBuf {
+    let scripts = dir.join(".just").join("scripts");
+    std::fs::create_dir_all(&scripts).expect("create hidden dir");
+    let probe = scripts.join("probe.sh");
+    std::fs::write(
+        &probe,
+        "#!/usr/bin/env bash\necho one\necho two\necho three\n",
+    )
+    .expect("write probe");
+    assert!(
+        probe.is_file(),
+        "probe must exist before asserting the gate"
+    );
+    probe
+}
+
+#[test]
+fn hidden_dir_unscanned_by_default() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Shell: 2\n");
+    write_hidden_probe(dir.path());
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All files within size limits"));
+}
+
+#[test]
+fn include_hidden_config_reports_dot_dir_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Shell: 2\ninclude_hidden: true\n");
+    write_hidden_probe(dir.path());
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("probe.sh"));
+}
+
+#[test]
+fn hidden_flag_reports_dot_dir_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), "limits:\n  Shell: 2\n");
+    write_hidden_probe(dir.path());
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--hidden")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("probe.sh"));
+}

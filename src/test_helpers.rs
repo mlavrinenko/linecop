@@ -24,6 +24,7 @@ pub fn make_config(limits: &[(&str, u64)], overrides: Vec<Override>, mode: Count
             .collect::<BTreeMap<_, _>>(),
         overrides,
         exclude_dirs: vec!["target".to_owned()],
+        include_hidden: false,
         default_limit: None,
     }
 }

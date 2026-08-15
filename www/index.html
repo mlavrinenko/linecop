@@ -461,6 +461,10 @@ footer a { color: var(--amber); }
         <p>Use <code>--baseline=90</code> to report files at 90% of their limit. Catch growing files before they become violations.</p>
       </div>
       <div class="feature-card">
+        <h3>Hidden Directories</h3>
+        <p>Set <code>include_hidden: true</code> (or pass <code>--hidden</code>) to hold scripts under <code>.just/</code> or <code>.github/</code> to the same limits. VCS metadata stays out.</p>
+      </div>
+      <div class="feature-card">
         <h3>Zero Config Start</h3>
         <p>Run <code>linecop init</code> to generate a starter <code>.linecop.yaml</code> with sensible defaults. Tweak from there.</p>
       </div>
@@ -491,7 +495,9 @@ overrides:
 
 exclude_dirs:
   - target
-  - node_modules</code></pre>
+  - node_modules
+
+include_hidden: false  # scan .just/scripts, .github/scripts, ...</code></pre>
     </div>
   </div>
 </section>

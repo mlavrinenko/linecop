@@ -37,6 +37,10 @@ struct Cli {
     #[arg(long)]
     no_config_warning: bool,
 
+    /// Scan hidden files and directories (dot-prefixed), overriding the config.
+    #[arg(long)]
+    hidden: bool,
+
     /// Report files at or above this percentage of their limit (1-100).
     #[arg(long, default_value = "100", value_parser = clap::value_parser!(u8).range(1..=100))]
     baseline: u8,
@@ -105,6 +109,7 @@ fn main() -> ExitCode {
         format: cli.format,
         no_config_warning: cli.no_config_warning,
         baseline: cli.baseline,
+        hidden: cli.hidden,
     };
 
     match linecop::run(&cli.path, &opts) {

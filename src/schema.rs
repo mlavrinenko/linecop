@@ -66,6 +66,14 @@ mod tests {
     }
 
     #[test]
+    fn schema_has_include_hidden_property() {
+        let output = generate().expect("generate");
+        let parsed: serde_json::Value = serde_json::from_str(&output).expect("valid json");
+        let props = parsed.get("properties").expect("properties");
+        assert!(props.get("include_hidden").is_some());
+    }
+
+    #[test]
     fn limits_property_names_constrained_to_tokei_languages() {
         let output = generate().expect("generate");
         let parsed: serde_json::Value = serde_json::from_str(&output).expect("valid json");

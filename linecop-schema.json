@@ -19,6 +19,11 @@
         "type": "string"
       }
     },
+    "include_hidden": {
+      "description": "Scan dot-prefixed files and directories such as `.just/scripts`\n(default: false). VCS metadata directories stay excluded, and\ngitignored paths are still skipped.",
+      "type": "boolean",
+      "default": false
+    },
     "limits": {
       "description": "Per-language line limits. Keys are tokei language names (e.g. \"Rust\", \"Python\").",
       "type": "object",
