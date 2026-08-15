@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Scan hidden directories",
-  status: wip(2026, 8, 15),
+  status: done(2026, 8, 15),
 )
 
 = Summary
