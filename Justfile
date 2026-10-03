@@ -1,5 +1,7 @@
 # Development recipes
 
+set quiet
+
 # List available recipes
 default:
     @just --list
