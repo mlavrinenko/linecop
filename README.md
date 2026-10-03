@@ -113,7 +113,7 @@ count_mode: total  # total | code | code-comments
 overrides:
   - pattern: "src/generated_*.rs"
     limit: 1000
-  - pattern: "./CONTRIBUTING.md"  # loaded whole by agents
+  - pattern: "CONTRIBUTING.md"  # loaded whole by agents
     max_bytes: 14000
   - pattern: "RESEARCH.md"
     exclude: true
@@ -126,6 +126,10 @@ include_hidden: false  # scan .just/scripts, .github/scripts, ...
 ```
 
 Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
+
+An override pattern is a path from the directory holding the config file, so
+`src/generated_*.rs` matches the same files under `linecop`, `linecop src/` or
+`linecop /abs/repo`, and from any working directory.
 
 An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
 file whose lines are paragraphs, so `max_bytes` caps its size too; the file

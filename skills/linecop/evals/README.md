@@ -20,12 +20,11 @@ outlived two config migrations unnoticed in a gitignored scratch tree.
 
 ## What discriminates
 
-Evals 1 and 2 separate the arms. Without the skill, an agent writes into
-parser.rs, then hits the limit and moves the code. It also tries the
-`src/tables.rs` glob, which does not match, before finding one that does. Evals
-0 and 3 pass in both arms once the prompt names linecop, because `--help` shows
-`--baseline` and `--format paths`. They guard against regressions; they are not
-evidence that the skill helps.
+Eval 1 separates the arms: without the skill, an agent writes into parser.rs,
+then hits the limit and moves the code. Evals 0, 2 and 3 pass in both arms
+once the prompt names linecop, because `--help` and the generated file's header
+say enough. They guard against regressions; they are not evidence that the
+skill helps.
 
 ## Running one
 

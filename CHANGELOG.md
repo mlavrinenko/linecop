@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pipe through `--format paths`. Its evals run on a fixture that
   `tests/skill_fixture.rs` pins
 
+### Fixed
+
+- An override pattern is a path from the config file's directory. It used to be
+  matched against the path as printed, which carries the scan argument, so
+  `src/x.rs` matched nothing under a bare `linecop` (paths there start with
+  `./`) or an absolute scan path. A leading `./` in a pattern still works
+
 ## 0.6.0 - 2026-10-03
 
 ### Added

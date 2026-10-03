@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Match override patterns relative to the config file",
-  status: proposed(2026, 10, 3),
+  status: wip(2026, 10, 3),
 )
 
 = Summary

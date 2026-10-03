@@ -26,7 +26,8 @@ pub enum CountMode {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Override {
-    /// Glob pattern to match file paths.
+    /// Glob pattern matched against the file path relative to the config
+    /// file's directory, e.g. `src/generated_*.rs`. A leading `./` is allowed.
     pub pattern: String,
     /// Custom line limit for matched files.
     #[serde(default)]
@@ -71,6 +72,11 @@ pub struct Config {
     #[serde(default)]
     #[schemars(skip)]
     pub default_limit: Option<u64>,
+    /// The config file's directory, which override patterns are relative to.
+    /// `None` matches them against paths as scanned.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub base_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -85,6 +91,7 @@ impl Config {
             exclude_dirs: default_exclude_dirs(),
             include_hidden: false,
             default_limit: Some(DEFAULT_LIMIT),
+            base_dir: None,
         }
     }
 }
@@ -118,9 +125,13 @@ pub fn find_config(start: &Path, stop: &Path) -> Option<PathBuf> {
 pub fn load(path: &Path) -> Result<Config> {
     let contents = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config file: {}", path.display()))?;
-    let config: Config = serde_yml::from_str(&contents)
+    let mut config: Config = serde_yml::from_str(&contents)
         .with_context(|| format!("failed to parse config file: {}", path.display()))?;
     validate(&config)?;
+    let canonical = path
+        .canonicalize()
+        .with_context(|| format!("failed to resolve config file: {}", path.display()))?;
+    config.base_dir = canonical.parent().map(Path::to_path_buf);
     Ok(config)
 }
 

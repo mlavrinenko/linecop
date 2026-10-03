@@ -430,7 +430,7 @@
           "minimum": 0
         },
         "pattern": {
-          "description": "Glob pattern to match file paths.",
+          "description": "Glob pattern matched against the file path relative to the config\nfile's directory, e.g. `src/generated_*.rs`. A leading `./` is allowed.",
           "type": "string"
         }
       },
