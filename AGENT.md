@@ -11,7 +11,7 @@
 
 Work is tracked in-repo with MindTape (`mt`): one task per file under `tasks/`,
 with the status legend in `.mindtape/config.toml`. `mt ls` shows what is open,
-`mt add <title words>` files a new task, `mt done <task>` closes one. Drive the
+`mt add <title words>` files a new task, `mt wip <task>` starts one and `mt done <task>` closes it (a `proposed` task cannot jump straight to `done`). Drive the
 CLI — `mt add` stamps the status and slugs the filename, and a hand-written task
 file skips that. The task body is Typst and is yours to edit; run `mt check`
 after.
