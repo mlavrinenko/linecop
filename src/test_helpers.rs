@@ -12,6 +12,7 @@ pub fn make_file(path: &str, lang: &str, code: u64, comments: u64, blanks: u64) 
         code,
         comments,
         blanks,
+        bytes: 0,
     }
 }
 

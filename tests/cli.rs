@@ -1,17 +1,7 @@
-use assert_cmd::Command;
+mod common;
+
+use common::{linecop, write_config};
 use predicates::prelude::predicate;
-use std::io::Write;
-
-fn linecop() -> Command {
-    Command::new(assert_cmd::cargo_bin!("linecop"))
-}
-
-fn write_config(dir: &std::path::Path, content: &str) -> std::path::PathBuf {
-    let path = dir.join(".linecop.yaml");
-    let mut file = std::fs::File::create(&path).expect("create config");
-    write!(file, "{content}").expect("write config");
-    path
-}
 
 // --- Happy path ---
 
@@ -186,94 +176,6 @@ fn no_config_warning_suppressed() {
         .assert()
         .success()
         .stderr(predicate::str::is_empty());
-}
-
-// --- Subcommands ---
-
-#[test]
-fn schema_subcommand_outputs_json_schema() {
-    linecop()
-        .arg("schema")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("\"$schema\""))
-        .stdout(predicate::str::contains("\"limits\""));
-}
-
-#[test]
-fn config_resolved_relative_to_path() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    // Place config inside the scan directory, not CWD
-    write_config(dir.path(), "limits:\n  Rust: 500\n");
-
-    let rs_path = dir.path().join("hello.rs");
-    std::fs::write(&rs_path, "fn main() {}\n").expect("write");
-
-    // Run without --config; it should find .linecop.yaml inside dir
-    linecop()
-        .arg(dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("All files within size limits"));
-}
-
-#[test]
-fn version_flag_shows_version() {
-    linecop()
-        .arg("--version")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("linecop"));
-}
-
-// --- Init subcommand ---
-
-#[test]
-fn init_creates_config_file_with_schema() {
-    let dir = tempfile::tempdir().expect("tempdir");
-
-    linecop()
-        .arg(dir.path())
-        .arg("init")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Created"));
-
-    let config_path = dir.path().join(".linecop.yaml");
-    assert!(config_path.exists());
-    let contents = std::fs::read_to_string(&config_path).expect("read");
-    assert!(contents.starts_with("# yaml-language-server: $schema=https://"));
-    assert!(contents.contains("limits:"));
-    assert!(contents.contains("Rust: 500"));
-}
-
-#[test]
-fn init_no_schema_omits_header() {
-    let dir = tempfile::tempdir().expect("tempdir");
-
-    linecop()
-        .arg(dir.path())
-        .arg("init")
-        .arg("--no-schema")
-        .assert()
-        .success();
-
-    let contents = std::fs::read_to_string(dir.path().join(".linecop.yaml")).expect("read");
-    assert!(!contents.contains("yaml-language-server"));
-    assert!(contents.starts_with("limits:"));
-}
-
-#[test]
-fn init_refuses_to_overwrite_existing() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    write_config(dir.path(), "limits:\n  Rust: 100\n");
-
-    linecop()
-        .arg(dir.path())
-        .arg("init")
-        .assert()
-        .code(2)
-        .stderr(predicate::str::contains("already exists"));
 }
 
 // --- Paths format ---
@@ -477,4 +379,31 @@ fn hidden_flag_reports_dot_dir_file() {
         .assert()
         .code(1)
         .stdout(predicate::str::contains("probe.sh"));
+}
+
+// --- Byte cap ---
+
+#[test]
+fn file_under_line_limit_but_over_max_bytes_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(
+        dir.path(),
+        "limits:\n  Markdown: 200\noverrides:\n  - pattern: \"**/ESSAY.md\"\n    max_bytes: 100\n",
+    );
+
+    // Two lines, one of them a paragraph that grew into an essay.
+    let essay = format!("# Essay\n{}\n", "word ".repeat(40));
+    std::fs::write(dir.path().join("ESSAY.md"), &essay).expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(format!(
+            "ESSAY.md: {} bytes (max_bytes: 100, +{} over)",
+            essay.len(),
+            essay.len() - 100
+        )));
 }

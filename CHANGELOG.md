@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `max_bytes` on an override, beside `limit`: a file breaches when it exceeds
+  either, and the report names which (`31204 bytes (max_bytes: 14000, +17204
+  over)`). Bounds a file whose lines are paragraphs, which grows in bytes and
+  not in lines. `--baseline` applies to it, and JSON output gains `bytes`,
+  `max_bytes` and `baseline-max-bytes` for a file that has the key
+
 ## 0.5.0 - 2026-10-03
 
 ### Changed

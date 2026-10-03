@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use tokei::{CodeStats, LanguageType, Languages};
 
 use crate::config::Config;
@@ -21,6 +21,8 @@ pub struct FileStats {
     pub comments: u64,
     /// Blank lines only, including nested blobs.
     pub blanks: u64,
+    /// File size in bytes.
+    pub bytes: u64,
 }
 
 /// VCS metadata directories, skipped whenever hidden scanning is enabled —
@@ -48,7 +50,8 @@ fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
 ///
 /// # Errors
 ///
-/// Returns an error if a language name in the config is not recognized by tokei.
+/// Returns an error if a language name in the config is not recognized by tokei,
+/// or a counted file cannot be stat-ed for its size.
 pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
     let types: Option<Vec<LanguageType>> = if config.limits.is_empty() {
         None
@@ -83,6 +86,9 @@ pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
     for (lang_type, language) in &languages {
         for report in &language.reports {
             let (code, comments, blanks) = summarise(&report.stats);
+            let bytes = std::fs::metadata(&report.name)
+                .with_context(|| format!("failed to stat {}", report.name.display()))?
+                .len();
             results.push(FileStats {
                 path: report.name.clone(),
                 language: lang_type.name().to_owned(),
@@ -90,6 +96,7 @@ pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
                 code,
                 comments,
                 blanks,
+                bytes,
             });
         }
     }
@@ -122,6 +129,8 @@ mod tests {
         assert_eq!(stats[0].language, "Rust");
         assert_eq!(stats[0].total, 3);
         assert_eq!(stats[0].code, 3);
+        let expected = std::fs::metadata(&rs_path).expect("stat").len();
+        assert_eq!(stats[0].bytes, expected);
     }
 
     #[test]

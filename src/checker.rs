@@ -5,26 +5,81 @@ use globset::{Glob, GlobMatcher};
 use crate::config::{Config, CountMode};
 use crate::counter::FileStats;
 
-/// A file that exceeds its line limit.
+/// A measured count held against its cap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Gauge {
+    /// The measured count (lines per the count mode, or bytes).
+    pub count: u64,
+    /// The configured cap.
+    pub limit: u64,
+    /// The effective threshold after applying the baseline percentage.
+    pub baseline_limit: u64,
+    /// Whether the count reaches the reporting threshold.
+    pub breached: bool,
+}
+
+impl Gauge {
+    /// At a baseline of 100 the count breaches only when it strictly exceeds
+    /// the cap; below 100 it breaches at or above the threshold.
+    fn new(count: u64, limit: u64, baseline: u8) -> Self {
+        let baseline_limit = limit * u64::from(baseline) / 100;
+        let breached = if baseline == 100 {
+            count > limit
+        } else {
+            count >= baseline_limit
+        };
+        Self {
+            count,
+            limit,
+            baseline_limit,
+            breached,
+        }
+    }
+}
+
+/// A file that breaches its line limit, its byte cap, or both.
 #[derive(Debug, Clone)]
 pub struct Violation {
     /// Path to the offending file.
     pub path: PathBuf,
     /// Language of the file.
     pub language: String,
-    /// Actual line count (based on count mode).
-    pub lines: u64,
-    /// The configured limit for this file.
-    pub limit: u64,
-    /// The effective threshold after applying the baseline percentage.
-    pub baseline_limit: u64,
+    /// Line count against the line limit; `None` when no line limit applies.
+    pub lines: Option<Gauge>,
+    /// Byte count against `max_bytes`; `None` when no override sets one.
+    pub bytes: Option<Gauge>,
 }
 
 /// A compiled override rule ready for matching.
 struct CompiledOverride {
     matcher: GlobMatcher,
     limit: Option<u64>,
+    max_bytes: Option<u64>,
     exclude: bool,
+}
+
+impl CompiledOverride {
+    fn compile_all(config: &Config) -> Vec<Self> {
+        config
+            .overrides
+            .iter()
+            .filter_map(|ovr| {
+                Glob::new(&ovr.pattern).ok().map(|glob| Self {
+                    matcher: glob.compile_matcher(),
+                    limit: ovr.limit,
+                    max_bytes: ovr.max_bytes,
+                    exclude: ovr.exclude,
+                })
+            })
+            .collect()
+    }
+}
+
+/// The caps a file is held to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Caps {
+    lines: Option<u64>,
+    bytes: Option<u64>,
 }
 
 /// Selects the line count based on the configured count mode.
@@ -36,69 +91,64 @@ fn select_count(file: &FileStats, mode: CountMode) -> u64 {
     }
 }
 
-/// Finds the effective limit for a file, checking overrides first.
-fn effective_limit(
+/// Finds the caps for a file, or `None` when it is excluded. The first
+/// matching override wins; a `limit` it leaves unset falls back to the
+/// language limit.
+fn effective_caps(
     file: &FileStats,
     config: &Config,
     compiled: &[CompiledOverride],
-) -> Option<u64> {
-    for ovr in compiled {
-        if ovr.matcher.is_match(&file.path) {
-            if ovr.exclude {
-                return None;
-            }
-            if let Some(limit) = ovr.limit {
-                return Some(limit);
-            }
-        }
+) -> Option<Caps> {
+    let language_limit = || {
+        config
+            .limits
+            .get(&file.language)
+            .copied()
+            .or(config.default_limit)
+    };
+    match compiled.iter().find(|ovr| ovr.matcher.is_match(&file.path)) {
+        Some(ovr) if ovr.exclude => None,
+        Some(ovr) => Some(Caps {
+            lines: ovr.limit.or_else(language_limit),
+            bytes: ovr.max_bytes,
+        }),
+        None => Some(Caps {
+            lines: language_limit(),
+            bytes: None,
+        }),
     }
-    config
-        .limits
-        .get(&file.language)
-        .copied()
-        .or(config.default_limit)
 }
 
-/// Checks all files against their limits and returns violations.
+/// Checks all files against their caps and returns violations.
 ///
-/// `baseline` is a percentage (1-100). At 100, files are reported only when
-/// they strictly exceed their limit (backward-compatible default). Below 100,
-/// files at or above `baseline` percent of the limit are reported.
+/// `baseline` is a percentage (1-100) applied to line limits and byte caps
+/// alike. At 100, a file is reported only when it strictly exceeds a cap
+/// (backward-compatible default). Below 100, files at or above `baseline`
+/// percent of a cap are reported.
 ///
 /// Glob patterns from overrides are compiled once upfront for efficiency.
 /// Invalid patterns are skipped (they are validated at config load time).
 pub fn check(files: &[FileStats], config: &Config, baseline: u8) -> Vec<Violation> {
-    let compiled: Vec<CompiledOverride> = config
-        .overrides
-        .iter()
-        .filter_map(|ovr| {
-            Glob::new(&ovr.pattern).ok().map(|glob| CompiledOverride {
-                matcher: glob.compile_matcher(),
-                limit: ovr.limit,
-                exclude: ovr.exclude,
-            })
-        })
-        .collect();
+    let compiled = CompiledOverride::compile_all(config);
 
     let mut violations = Vec::new();
     for file in files {
-        if let Some(limit) = effective_limit(file, config, &compiled) {
-            let lines = select_count(file, config.count_mode);
-            let threshold = limit * u64::from(baseline) / 100;
-            let exceeded = if baseline == 100 {
-                lines > limit
-            } else {
-                lines >= threshold
-            };
-            if exceeded {
-                violations.push(Violation {
-                    path: file.path.clone(),
-                    language: file.language.clone(),
-                    lines,
-                    limit,
-                    baseline_limit: threshold,
-                });
-            }
+        let Some(caps) = effective_caps(file, config, &compiled) else {
+            continue;
+        };
+        let lines = caps
+            .lines
+            .map(|limit| Gauge::new(select_count(file, config.count_mode), limit, baseline));
+        let bytes = caps
+            .bytes
+            .map(|limit| Gauge::new(file.bytes, limit, baseline));
+        if lines.iter().chain(&bytes).any(|gauge| gauge.breached) {
+            violations.push(Violation {
+                path: file.path.clone(),
+                language: file.language.clone(),
+                lines,
+                bytes,
+            });
         }
     }
     violations
@@ -107,23 +157,16 @@ pub fn check(files: &[FileStats], config: &Config, baseline: u8) -> Vec<Violatio
 #[cfg(test)]
 #[allow(clippy::indexing_slicing)]
 mod tests {
-    use super::{CompiledOverride, check, effective_limit, select_count};
+    use super::{Caps, CompiledOverride, Gauge, Violation, check, effective_caps, select_count};
     use crate::config::{Config, CountMode, Override};
     use crate::test_helpers::{make_config, make_file};
-    use globset::Glob;
 
-    fn compile_overrides(config: &Config) -> Vec<CompiledOverride> {
-        config
-            .overrides
-            .iter()
-            .filter_map(|ovr| {
-                Glob::new(&ovr.pattern).ok().map(|glob| CompiledOverride {
-                    matcher: glob.compile_matcher(),
-                    limit: ovr.limit,
-                    exclude: ovr.exclude,
-                })
-            })
-            .collect()
+    fn caps(file: &crate::counter::FileStats, config: &Config) -> Option<Caps> {
+        effective_caps(file, config, &CompiledOverride::compile_all(config))
+    }
+
+    fn lines(violation: &Violation) -> Gauge {
+        violation.lines.expect("line gauge")
     }
 
     #[test]
@@ -140,8 +183,8 @@ mod tests {
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].lines, 510);
-        assert_eq!(violations[0].limit, 500);
+        assert_eq!(lines(&violations[0]).count, 510);
+        assert_eq!(lines(&violations[0]).limit, 500);
     }
 
     #[test]
@@ -150,6 +193,7 @@ mod tests {
         let overrides = vec![Override {
             pattern: "RESEARCH.md".into(),
             limit: None,
+            max_bytes: None,
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
@@ -163,6 +207,7 @@ mod tests {
         let overrides = vec![Override {
             pattern: "src/generated.rs".into(),
             limit: Some(1000),
+            max_bytes: None,
             exclude: false,
         }];
         let config = make_config(&[("Rust", 500)], overrides, CountMode::Total);
@@ -192,7 +237,7 @@ mod tests {
         let config = make_config(&[("Rust", 500)], vec![], CountMode::CodeComments);
         let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].lines, 510);
+        assert_eq!(lines(&violations[0]).count, 510);
     }
 
     #[test]
@@ -210,11 +255,13 @@ mod tests {
             Override {
                 pattern: "src/gen.rs".into(),
                 limit: Some(1000),
+                max_bytes: None,
                 exclude: false,
             },
             Override {
                 pattern: "src/*.rs".into(),
                 limit: None,
+                max_bytes: None,
                 exclude: true,
             },
         ];
@@ -242,24 +289,29 @@ mod tests {
     }
 
     #[test]
-    fn effective_limit_with_no_overrides() {
+    fn effective_caps_with_no_overrides() {
         let file = make_file("src/main.rs", "Rust", 10, 0, 0);
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
-        let compiled = compile_overrides(&config);
-        assert_eq!(effective_limit(&file, &config, &compiled), Some(500));
+        assert_eq!(
+            caps(&file, &config),
+            Some(Caps {
+                lines: Some(500),
+                bytes: None
+            })
+        );
     }
 
     #[test]
-    fn effective_limit_exclude_returns_none() {
+    fn effective_caps_exclude_returns_none() {
         let file = make_file("RESEARCH.md", "Markdown", 10, 0, 0);
         let overrides = vec![Override {
             pattern: "RESEARCH.md".into(),
             limit: None,
+            max_bytes: None,
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
-        let compiled = compile_overrides(&config);
-        assert_eq!(effective_limit(&file, &config, &compiled), None);
+        assert_eq!(caps(&file, &config), None);
     }
 
     #[test]
@@ -269,7 +321,7 @@ mod tests {
         config.default_limit = Some(500);
         let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].limit, 500);
+        assert_eq!(lines(&violations[0]).limit, 500);
     }
 
     #[test]
@@ -279,7 +331,7 @@ mod tests {
         config.default_limit = Some(500);
         let violations = check(&files, &config, 100);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].limit, 300);
+        assert_eq!(lines(&violations[0]).limit, 300);
     }
 
     #[test]
@@ -296,6 +348,7 @@ mod tests {
         let overrides = vec![Override {
             pattern: "docs/*.md".into(),
             limit: None,
+            max_bytes: None,
             exclude: true,
         }];
         let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
@@ -309,9 +362,9 @@ mod tests {
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let violations = check(&files, &config, 90);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].lines, 450);
-        assert_eq!(violations[0].limit, 500);
-        assert_eq!(violations[0].baseline_limit, 450);
+        assert_eq!(lines(&violations[0]).count, 450);
+        assert_eq!(lines(&violations[0]).limit, 500);
+        assert_eq!(lines(&violations[0]).baseline_limit, 450);
     }
 
     #[test]
@@ -336,6 +389,65 @@ mod tests {
         let config = make_config(&[("Rust", 500)], vec![], CountMode::Total);
         let violations = check(&files, &config, 50);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].baseline_limit, 250);
+        assert_eq!(lines(&violations[0]).baseline_limit, 250);
+    }
+
+    fn byte_capped(pattern: &str, limit: Option<u64>, max_bytes: u64) -> Vec<Override> {
+        vec![Override {
+            pattern: pattern.into(),
+            limit,
+            max_bytes: Some(max_bytes),
+            exclude: false,
+        }]
+    }
+
+    #[test]
+    fn max_bytes_breach_under_line_limit() {
+        let mut file = make_file("CONTRIBUTING.md", "Markdown", 128, 0, 0);
+        file.bytes = 30853;
+        let overrides = byte_capped("CONTRIBUTING.md", Some(142), 14000);
+        let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
+        let violations = check(&[file], &config, 100);
+        assert_eq!(violations.len(), 1);
+        assert!(!lines(&violations[0]).breached);
+        let bytes = violations[0].bytes.expect("byte gauge");
+        assert!(bytes.breached);
+        assert_eq!((bytes.count, bytes.limit), (30853, 14000));
+    }
+
+    #[test]
+    fn max_bytes_within_cap_no_violation() {
+        let mut file = make_file("CONTRIBUTING.md", "Markdown", 128, 0, 0);
+        file.bytes = 14000;
+        let overrides = byte_capped("CONTRIBUTING.md", None, 14000);
+        let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
+        assert!(check(&[file], &config, 100).is_empty());
+    }
+
+    #[test]
+    fn max_bytes_only_override_keeps_language_limit() {
+        let file = make_file("CONTRIBUTING.md", "Markdown", 10, 0, 0);
+        let overrides = byte_capped("CONTRIBUTING.md", None, 14000);
+        let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
+        assert_eq!(
+            caps(&file, &config),
+            Some(Caps {
+                lines: Some(200),
+                bytes: Some(14000)
+            })
+        );
+    }
+
+    #[test]
+    fn baseline_applies_to_max_bytes() {
+        let mut file = make_file("CONTRIBUTING.md", "Markdown", 10, 0, 0);
+        file.bytes = 900;
+        let overrides = byte_capped("CONTRIBUTING.md", None, 1000);
+        let config = make_config(&[("Markdown", 200)], overrides, CountMode::Total);
+        let violations = check(&[file], &config, 90);
+        assert_eq!(violations.len(), 1);
+        let bytes = violations[0].bytes.expect("byte gauge");
+        assert_eq!(bytes.baseline_limit, 900);
+        assert!(bytes.breached);
     }
 }

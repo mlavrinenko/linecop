@@ -94,8 +94,9 @@ linecop --hidden
 linecop schema > linecop-schema.json
 ```
 
-With `--baseline` below 100, JSON output gains a `baseline-limit` field
-(the effective threshold) alongside `lines` and `limit` for each file.
+JSON output carries `lines`, `limit` and `baseline-limit` (the threshold after
+`--baseline`) for each file, plus `bytes`, `max_bytes` and `baseline-max-bytes`
+for a file whose override sets `max_bytes`.
 
 ## Configuration
 
@@ -112,6 +113,8 @@ count_mode: total  # total | code | code-comments
 overrides:
   - pattern: "src/generated_*.rs"
     limit: 1000
+  - pattern: "./CONTRIBUTING.md"  # loaded whole by agents
+    max_bytes: 14000
   - pattern: "RESEARCH.md"
     exclude: true
 
@@ -123,6 +126,12 @@ include_hidden: false  # scan .just/scripts, .github/scripts, ...
 ```
 
 Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
+
+An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
+file whose lines are paragraphs, so `max_bytes` caps its size too; the file
+breaches when it exceeds either, and the report names which:
+`--- CONTRIBUTING.md: 31204 bytes (max_bytes: 14000, +17204 over)`. An override
+without `limit` keeps the language limit, and `--baseline` applies to both.
 
 Dot-prefixed files and directories are skipped unless `include_hidden: true`
 (or `--hidden`) is set. With it on, `.git`, `.hg`, `.svn` and `.jj` stay out of

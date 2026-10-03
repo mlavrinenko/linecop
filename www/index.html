@@ -442,7 +442,7 @@ footer a { color: var(--amber); }
       </div>
       <div class="feature-card">
         <h3>Glob Overrides</h3>
-        <p>Need a higher limit for generated files? Exclude vendor code? Per-file glob patterns let you fine-tune enforcement.</p>
+        <p>Need a higher limit for generated files? Exclude vendor code? Cap a doc agents load whole with <code>max_bytes</code>, so paragraph-long lines still count. Per-file glob patterns let you fine-tune enforcement.</p>
       </div>
       <div class="feature-card">
         <h3>JSON Schema</h3>
@@ -490,6 +490,8 @@ count_mode: total  # total | code | code-comments
 overrides:
   - pattern: "src/generated_*.rs"
     limit: 1000
+  - pattern: "./CONTRIBUTING.md"  # loaded whole by agents
+    max_bytes: 14000
   - pattern: "RESEARCH.md"
     exclude: true
 

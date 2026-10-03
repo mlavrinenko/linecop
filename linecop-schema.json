@@ -419,6 +419,16 @@
           "default": null,
           "minimum": 0
         },
+        "max_bytes": {
+          "description": "Byte cap for matched files, checked beside the line limit. Catches a\nfile whose lines are paragraphs: it grows in bytes, not in lines.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
         "pattern": {
           "description": "Glob pattern to match file paths.",
           "type": "string"

@@ -4,7 +4,7 @@ use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::checker::Violation;
+use crate::checker::{Gauge, Violation};
 
 const STYLE_BOLD: Style = Style::new().bold();
 const STYLE_RED: Style = AnsiColor::Red.on_default().bold();
@@ -27,10 +27,18 @@ pub enum Format {
 struct JsonViolation {
     path: String,
     language: String,
-    lines: u64,
-    limit: u64,
-    #[serde(rename = "baseline-limit")]
-    baseline_limit: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lines: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<u64>,
+    #[serde(rename = "baseline-limit", skip_serializing_if = "Option::is_none")]
+    baseline_limit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_bytes: Option<u64>,
+    #[serde(rename = "baseline-max-bytes", skip_serializing_if = "Option::is_none")]
+    baseline_max_bytes: Option<u64>,
 }
 
 /// Prints violations to the given writer.
@@ -46,43 +54,75 @@ pub fn print(writer: &mut dyn Write, violations: &[Violation], format: Format) -
     }
 }
 
+/// A breached gauge with the words naming its unit and its cap.
+struct Breach<'a> {
+    gauge: Gauge,
+    unit: &'a str,
+    cap: &'a str,
+}
+
+fn breaches(vv: &Violation) -> impl Iterator<Item = Breach<'static>> {
+    let lines = vv.lines.map(|gauge| Breach {
+        gauge,
+        unit: "lines",
+        cap: "limit",
+    });
+    let bytes = vv.bytes.map(|gauge| Breach {
+        gauge,
+        unit: "bytes",
+        cap: "max_bytes",
+    });
+    lines
+        .into_iter()
+        .chain(bytes)
+        .filter(|breach| breach.gauge.breached)
+}
+
+fn total_over(violations: &[Violation], pick: fn(&Violation) -> Option<Gauge>) -> u64 {
+    violations
+        .iter()
+        .filter_map(pick)
+        .map(|gauge| gauge.count.saturating_sub(gauge.limit))
+        .sum()
+}
+
 fn print_text(writer: &mut dyn Write, violations: &[Violation]) -> Result<()> {
     let reset = anstyle::Reset;
     for vv in violations {
-        if vv.lines > vv.limit {
-            let over = vv.lines - vv.limit;
-            writeln!(
-                writer,
-                "{STYLE_RED}---{reset} {STYLE_BOLD}{}{reset}: {} lines (limit: {}, {STYLE_YELLOW}+{over} over{reset})",
-                vv.path.display(),
-                vv.lines,
-                vv.limit,
-            )?;
-        } else {
-            let pct = vv.lines * 100 / vv.limit;
-            writeln!(
-                writer,
-                "{STYLE_YELLOW}~~~{reset} {STYLE_BOLD}{}{reset}: {} lines (limit: {}, {STYLE_YELLOW}{pct}% of limit{reset})",
-                vv.path.display(),
-                vv.lines,
-                vv.limit,
-            )?;
+        for Breach { gauge, unit, cap } in breaches(vv) {
+            let (count, limit) = (gauge.count, gauge.limit);
+            if count > limit {
+                let over = count - limit;
+                writeln!(
+                    writer,
+                    "{STYLE_RED}---{reset} {STYLE_BOLD}{}{reset}: {count} {unit} ({cap}: {limit}, {STYLE_YELLOW}+{over} over{reset})",
+                    vv.path.display(),
+                )?;
+            } else {
+                let pct = count * 100 / limit;
+                writeln!(
+                    writer,
+                    "{STYLE_YELLOW}~~~{reset} {STYLE_BOLD}{}{reset}: {count} {unit} ({cap}: {limit}, {STYLE_YELLOW}{pct}% of limit{reset})",
+                    vv.path.display(),
+                )?;
+            }
         }
     }
     if violations.is_empty() {
         writeln!(writer, "{STYLE_GREEN}All files within size limits.{reset}")?;
     } else {
-        let total_over: u64 = violations
-            .iter()
-            .map(|vv| vv.lines.saturating_sub(vv.limit))
-            .sum();
         writeln!(
             writer,
             "\n{STYLE_RED}{} file(s) reported.{reset} Consider refactoring.",
             violations.len()
         )?;
-        if total_over > 0 {
-            writeln!(writer, "{STYLE_RED}+{total_over} lines over limit.{reset}")?;
+        let lines_over = total_over(violations, |vv| vv.lines);
+        if lines_over > 0 {
+            writeln!(writer, "{STYLE_RED}+{lines_over} lines over limit.{reset}")?;
+        }
+        let bytes_over = total_over(violations, |vv| vv.bytes);
+        if bytes_over > 0 {
+            writeln!(writer, "{STYLE_RED}+{bytes_over} bytes over limit.{reset}")?;
         }
     }
     Ok(())
@@ -94,9 +134,12 @@ fn print_json(writer: &mut dyn Write, violations: &[Violation]) -> Result<()> {
         .map(|vv| JsonViolation {
             path: vv.path.to_string_lossy().into_owned(),
             language: vv.language.clone(),
-            lines: vv.lines,
-            limit: vv.limit,
-            baseline_limit: vv.baseline_limit,
+            lines: vv.lines.map(|gg| gg.count),
+            limit: vv.lines.map(|gg| gg.limit),
+            baseline_limit: vv.lines.map(|gg| gg.baseline_limit),
+            bytes: vv.bytes.map(|gg| gg.count),
+            max_bytes: vv.bytes.map(|gg| gg.limit),
+            baseline_max_bytes: vv.bytes.map(|gg| gg.baseline_limit),
         })
         .collect();
     serde_json::to_writer_pretty(&mut *writer, &json_violations)?;
@@ -115,17 +158,20 @@ fn print_paths(writer: &mut dyn Write, violations: &[Violation]) -> Result<()> {
 #[allow(clippy::indexing_slicing)]
 mod tests {
     use super::{Format, print};
-    use crate::checker::Violation;
+    use crate::checker::{Gauge, Violation};
     use std::path::PathBuf;
 
-    fn make_violation(path: &str, lang: &str, lines: u64, limit: u64) -> Violation {
-        Violation {
-            path: PathBuf::from(path),
-            language: lang.to_owned(),
-            lines,
+    fn gauge(count: u64, limit: u64, baseline_limit: u64, breached: bool) -> Gauge {
+        Gauge {
+            count,
             limit,
-            baseline_limit: limit,
+            baseline_limit,
+            breached,
         }
+    }
+
+    fn make_violation(path: &str, lang: &str, lines: u64, limit: u64) -> Violation {
+        make_baseline_violation(path, lang, lines, limit, limit)
     }
 
     fn make_baseline_violation(
@@ -138,9 +184,18 @@ mod tests {
         Violation {
             path: PathBuf::from(path),
             language: lang.to_owned(),
-            lines,
-            limit,
-            baseline_limit,
+            lines: Some(gauge(lines, limit, baseline_limit, true)),
+            bytes: None,
+        }
+    }
+
+    /// A file within its line limit that breaches its byte cap.
+    fn make_bytes_violation(path: &str, bytes: u64, max_bytes: u64) -> Violation {
+        Violation {
+            path: PathBuf::from(path),
+            language: "Markdown".to_owned(),
+            lines: Some(gauge(128, 142, 142, false)),
+            bytes: Some(gauge(bytes, max_bytes, max_bytes, true)),
         }
     }
 
@@ -268,5 +323,39 @@ mod tests {
         print(&mut buf, &violations, Format::Text).expect("print");
         let output = strip_ansi(&String::from_utf8(buf).expect("utf8"));
         assert!(output.contains("~~~ src/near.rs: 480 lines (limit: 500, 96% of limit)"));
+    }
+
+    #[test]
+    fn text_format_names_the_breached_byte_cap() {
+        let violations = vec![make_bytes_violation("CONTRIBUTING.md", 31204, 14000)];
+        let mut buf = Vec::new();
+        print(&mut buf, &violations, Format::Text).expect("print");
+        let output = strip_ansi(&String::from_utf8(buf).expect("utf8"));
+        assert!(
+            output.contains("--- CONTRIBUTING.md: 31204 bytes (max_bytes: 14000, +17204 over)")
+        );
+        assert!(
+            !output.contains("128 lines"),
+            "the unbreached line limit stays quiet"
+        );
+        assert!(output.contains("+17204 bytes over limit"));
+        assert!(!output.contains("lines over limit"));
+    }
+
+    #[test]
+    fn json_format_carries_bytes_for_capped_file() {
+        let violations = vec![
+            make_bytes_violation("CONTRIBUTING.md", 31204, 14000),
+            make_violation("src/big.rs", "Rust", 523, 500),
+        ];
+        let mut buf = Vec::new();
+        print(&mut buf, &violations, Format::Json).expect("print");
+        let parsed: serde_json::Value = serde_json::from_slice(&buf).expect("valid json");
+        assert_eq!(parsed[0]["lines"], 128);
+        assert_eq!(parsed[0]["bytes"], 31204);
+        assert_eq!(parsed[0]["max_bytes"], 14000);
+        assert_eq!(parsed[0]["baseline-max-bytes"], 14000);
+        assert!(parsed[1].get("bytes").is_none(), "no key, no bytes");
+        assert!(parsed[1].get("max_bytes").is_none());
     }
 }

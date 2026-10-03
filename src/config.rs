@@ -31,6 +31,10 @@ pub struct Override {
     /// Custom line limit for matched files.
     #[serde(default)]
     pub limit: Option<u64>,
+    /// Byte cap for matched files, checked beside the line limit. Catches a
+    /// file whose lines are paragraphs: it grows in bytes, not in lines.
+    #[serde(default)]
+    pub max_bytes: Option<u64>,
     /// If true, matched files are excluded from checking.
     #[serde(default)]
     pub exclude: bool,
@@ -121,12 +125,12 @@ pub fn load(path: &Path) -> Result<Config> {
 }
 
 /// Validates that all language names are recognized by tokei and that
-/// overrides have either a limit or exclude set.
+/// overrides set a limit, a byte cap or exclude.
 ///
 /// # Errors
 ///
-/// Returns an error if a language name is unknown or an override has
-/// neither `limit` nor `exclude`.
+/// Returns an error if a language name is unknown or an override sets none
+/// of `limit`, `max_bytes` and `exclude`.
 pub fn validate(config: &Config) -> Result<()> {
     for lang_name in config.limits.keys() {
         if lang_name.parse::<LanguageType>().is_err() {
@@ -134,9 +138,9 @@ pub fn validate(config: &Config) -> Result<()> {
         }
     }
     for (idx, ovr) in config.overrides.iter().enumerate() {
-        if ovr.limit.is_none() && !ovr.exclude {
+        if ovr.limit.is_none() && ovr.max_bytes.is_none() && !ovr.exclude {
             bail!(
-                "override #{} (pattern {:?}) must have either `limit` or `exclude: true`",
+                "override #{} (pattern {:?}) must set `limit`, `max_bytes` or `exclude: true`",
                 idx + 1,
                 ovr.pattern
             );
@@ -205,7 +209,25 @@ overrides:
 "#;
         let config: Config = serde_yml::from_str(yaml).expect("parse");
         let err = validate(&config).expect_err("should reject override without limit or exclude");
-        assert!(err.to_string().contains("must have either"));
+        assert!(
+            err.to_string()
+                .contains("must set `limit`, `max_bytes` or `exclude: true`")
+        );
+    }
+
+    #[test]
+    fn override_with_only_max_bytes_accepted() {
+        let yaml = r#"
+limits:
+  Markdown: 200
+overrides:
+  - pattern: "./CONTRIBUTING.md"
+    max_bytes: 14000
+"#;
+        let config: Config = serde_yml::from_str(yaml).expect("parse");
+        let ovr = config.overrides.first().expect("override");
+        assert_eq!(ovr.max_bytes, Some(14000));
+        validate(&config).expect("valid");
     }
 
     #[test]
@@ -346,6 +368,7 @@ overrides:
         let ovr = Override {
             pattern: "*.md".into(),
             limit: None,
+            max_bytes: None,
             exclude: true,
         };
         assert!(ovr.exclude);
