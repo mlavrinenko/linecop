@@ -138,6 +138,13 @@ Dot-prefixed files and directories are skipped unless `include_hidden: true`
 the scan, and gitignored paths are still ignored — so a hidden build directory
 gets limits without dragging repository metadata in.
 
+## Agent skill
+
+[`skills/linecop`](skills/linecop/SKILL.md) teaches a coding agent to check
+headroom with `--baseline` before growing a file, instead of meeting the limit
+when the gate fails. Copy or link it into your agent's skills directory, e.g.
+`~/.claude/skills/linecop`.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for coding conventions and guidelines.

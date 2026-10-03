@@ -1,0 +1,6 @@
+limits:
+  Rust: 80
+  Markdown: 40
+
+# Blank lines and comments are free: only code counts against a limit.
+count_mode: code

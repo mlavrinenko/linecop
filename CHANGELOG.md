@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- An agent skill, `skills/linecop`, that has an agent check headroom with
+  `--baseline` before it grows a file, split or raise a limit on purpose, and
+  pipe through `--format paths`. Its evals run on a fixture that
+  `tests/skill_fixture.rs` pins
+
 ## 0.6.0 - 2026-10-03
 
 ### Added

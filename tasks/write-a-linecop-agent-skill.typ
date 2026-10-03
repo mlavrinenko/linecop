@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Write a linecop agent skill",
-  status: proposed(2026, 7, 26),
+  status: wip(2026, 10, 3),
 )
 
 = Summary
