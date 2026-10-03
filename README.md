@@ -52,6 +52,7 @@ linecop [PATH] <COMMAND>
 | Option | Description |
 |--------|-------------|
 | `-c, --config <FILE>` | Config file path (default: auto-detected) |
+| `--config-search <repo\|root>` | How far up to look for the config: `repo` (default) stops at the repository root, `root` walks to the filesystem root |
 | `-q, --quiet` | Suppress output (exit code only) |
 | `--format <text\|json\|paths>` | Output format (default: `text`) |
 | `--baseline <PERCENT>` | Report files at or above this percentage of their limit, 1-100 (default: `100`) |
@@ -100,7 +101,11 @@ for a file whose override sets `max_bytes`.
 
 ## Configuration
 
-Create a `.linecop.yaml` in your project root:
+Create a `.linecop.yaml` in your project root. linecop uses the nearest one found
+walking up from the scanned path, and stops after the repository root (a directory
+with `.git`, `.jj`, `.hg` or `.svn`), or at the working directory outside a
+repository. `--config-search root` walks on to the filesystem root; `--config`
+skips the search.
 
 ```yaml
 limits:

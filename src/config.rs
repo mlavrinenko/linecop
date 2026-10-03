@@ -98,24 +98,48 @@ impl Config {
     }
 }
 
-/// Searches for `.linecop.yaml` starting from `start` and traversing up,
-/// stopping at `stop` (inclusive). Returns the first path found, or `None`.
+/// Directory entries that mark a repository root.
+const REPO_MARKERS: [&str; 4] = [".git", ".jj", ".hg", ".svn"];
+
+/// How far up config discovery walks.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ConfigSearch {
+    /// Stop after the repository root; with no repository, at the working directory.
+    #[default]
+    Repo,
+    /// Walk to the filesystem root, ignoring repository markers.
+    Root,
+}
+
+fn is_repo_root(dir: &Path) -> bool {
+    REPO_MARKERS.iter().any(|marker| dir.join(marker).exists())
+}
+
+/// Searches for the nearest `.linecop.yaml` from `start` (canonicalized, so
+/// `..` and symlinks resolve) upwards. With [`ConfigSearch::Repo`] the walk
+/// ends at the first directory holding a repository marker, or at `cwd` when
+/// no marker exists up the chain; with [`ConfigSearch::Root`] it ends at the
+/// filesystem root. Returns the first path found, or `None`.
 #[must_use]
-pub fn find_config(start: &Path, stop: &Path) -> Option<PathBuf> {
-    let mut dir = start.to_path_buf();
-    loop {
-        let candidate = dir.join(".linecop.yaml");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        if dir == stop {
-            break;
-        }
-        if !dir.pop() {
-            break;
-        }
+pub fn find_config(start: &Path, cwd: &Path, search: ConfigSearch) -> Option<PathBuf> {
+    let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
+    let cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let mut dirs: Vec<&Path> = start.ancestors().collect();
+    if start.is_file() {
+        dirs.remove(0);
     }
-    None
+    let limit = match search {
+        ConfigSearch::Root => dirs.len(),
+        ConfigSearch::Repo => dirs
+            .iter()
+            .position(|dir| is_repo_root(dir))
+            .or_else(|| dirs.iter().position(|dir| *dir == cwd))
+            .map_or(dirs.len(), |idx| idx + 1),
+    };
+    dirs.iter()
+        .take(limit)
+        .map(|dir| dir.join(".linecop.yaml"))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Loads and validates a config from the given YAML file.
@@ -195,7 +219,7 @@ pub fn compile_pattern(pattern: &str) -> Result<Gitignore> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, CountMode, Override, load, validate};
+    use super::{Config, ConfigSearch, CountMode, Override, load, validate};
     use std::io::Write;
 
     #[test]
@@ -308,7 +332,7 @@ overrides:
         let dir = tempfile::tempdir().expect("tempdir");
         let cfg = dir.path().join(".linecop.yaml");
         std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
-        let found = super::find_config(dir.path(), dir.path());
+        let found = super::find_config(dir.path(), dir.path(), ConfigSearch::Repo);
         assert_eq!(found, Some(cfg));
     }
 
@@ -319,7 +343,7 @@ overrides:
         std::fs::create_dir_all(&sub).expect("mkdir");
         let cfg = dir.path().join(".linecop.yaml");
         std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
-        let found = super::find_config(&sub, dir.path());
+        let found = super::find_config(&sub, dir.path(), ConfigSearch::Repo);
         assert_eq!(found, Some(cfg));
     }
 
@@ -333,15 +357,39 @@ overrides:
         let cfg = dir.path().join(".linecop.yaml");
         std::fs::write(&cfg, "limits:\n  Rust: 500\n").expect("write");
         // Search from child, stop at parent — should NOT find config in dir
-        let found = super::find_config(&child, &parent);
+        let found = super::find_config(&child, &parent, ConfigSearch::Repo);
         assert!(found.is_none());
     }
 
     #[test]
     fn find_config_returns_none_when_missing() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let found = super::find_config(dir.path(), dir.path());
+        let found = super::find_config(dir.path(), dir.path(), ConfigSearch::Repo);
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_config_stops_after_repo_root() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let repo = dir.path().join("repo");
+        let sub = repo.join("sub");
+        std::fs::create_dir_all(&sub).expect("mkdir");
+        std::fs::create_dir(repo.join(".git")).expect("mkdir");
+        std::fs::write(dir.path().join(".linecop.yaml"), "limits:\n  Rust: 5\n").expect("write");
+        assert!(super::find_config(&sub, dir.path(), ConfigSearch::Repo).is_none());
+        assert!(super::find_config(&sub, &sub, ConfigSearch::Root).is_some());
+    }
+
+    #[test]
+    fn find_config_repo_root_beyond_cwd() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let sub = dir.path().join("sub");
+        std::fs::create_dir_all(&sub).expect("mkdir");
+        std::fs::create_dir(dir.path().join(".git")).expect("mkdir");
+        let cfg = dir.path().join(".linecop.yaml");
+        std::fs::write(&cfg, "limits:\n  Rust: 5\n").expect("write");
+        let found = super::find_config(&sub, &sub, ConfigSearch::Repo);
+        assert_eq!(found, Some(std::fs::canonicalize(cfg).expect("canon")));
     }
 
     #[test]

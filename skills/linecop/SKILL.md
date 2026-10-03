@@ -30,8 +30,9 @@ violation already there is not yours to fix in passing; name it and move on.
 
 ## Where a limit comes from
 
-`.linecop.yaml`, found by walking up from the scanned path to the working
-directory. Read it before writing, not after the gate trips.
+`.linecop.yaml`, the nearest one walking up from the scanned path to the
+repository root (the working directory outside a repository). Read it before
+writing, not after the gate trips.
 
 - `limits`: per language, by tokei name (`Rust`, `Markdown`, `Python`). A
   language with no entry is not checked.

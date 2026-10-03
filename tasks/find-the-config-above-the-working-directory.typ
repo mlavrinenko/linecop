@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Find the config above the working directory",
-  status: proposed(2026, 10, 3),
+  status: wip(2026, 10, 3),
 )
 
 = Summary

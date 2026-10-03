@@ -27,6 +27,10 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
+    /// How far up to look for the config: to the repository root, or to the filesystem root.
+    #[arg(long, value_enum, default_value = "repo")]
+    config_search: linecop::config::ConfigSearch,
+
     /// Suppress output (exit code only).
     #[arg(short, long)]
     quiet: bool,
@@ -111,6 +115,7 @@ fn main() -> ExitCode {
 
     let opts = RunOptions {
         config_path: cli.config.as_deref(),
+        config_search: cli.config_search,
         quiet: cli.quiet,
         format: cli.format,
         no_config_warning: cli.no_config_warning,

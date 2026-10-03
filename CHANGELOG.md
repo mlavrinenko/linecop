@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Config discovery walks up from the scanned path (canonicalized) past the
+  working directory and stops after the repository root: the first directory
+  holding `.git`, `.jj`, `.hg` or `.svn`. Outside a repository it still stops at
+  the working directory. `--config-search root` walks to the filesystem root
+  instead, and `--config` skips the search. Running linecop inside a
+  subdirectory no longer falls back to the 500-line default
+
 - An agent skill, `skills/linecop`, that has an agent check headroom with
   `--baseline` before it grows a file, split or raise a limit on purpose, and
   pipe through `--format paths`. Its evals run on a fixture that
