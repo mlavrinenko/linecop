@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "split violation and operational exit codes",
-  status: proposed(2026, 8, 29),
+  status: done(2026, 10, 3),
   tags: ("cli",),
 )
 
