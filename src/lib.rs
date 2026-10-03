@@ -35,7 +35,8 @@ pub struct RunOptions<'a> {
 
 /// Runs the full linecop check pipeline.
 ///
-/// Returns `true` if there are violations (i.e. the process should exit non-zero).
+/// Returns `true` if there are violations (the CLI exits 1); errors mean the
+/// check never ran (the CLI exits 2).
 ///
 /// # Errors
 ///

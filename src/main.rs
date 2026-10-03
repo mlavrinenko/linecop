@@ -7,6 +7,12 @@ use clap::{Parser, Subcommand};
 use linecop::RunOptions;
 use linecop::report::Format;
 
+/// Files exceed their limits: the codebase needs attention.
+const EXIT_VIOLATIONS: u8 = 1;
+/// The run could not happen: bad config, missing path, I/O failure. Matches
+/// clap's own code for usage errors.
+const EXIT_OPERATIONAL: u8 = 2;
+
 #[derive(Parser)]
 #[command(
     about = "Patrols your code base to enforce line count limits.",
@@ -73,7 +79,7 @@ fn run_subcommand(result: Result<String>) -> ExitCode {
         }
         Err(err) => {
             eprintln!("error: {err:#}");
-            ExitCode::FAILURE
+            ExitCode::from(EXIT_OPERATIONAL)
         }
     }
 }
@@ -113,11 +119,11 @@ fn main() -> ExitCode {
     };
 
     match linecop::run(&cli.path, &opts) {
-        Ok(true) => ExitCode::FAILURE,
+        Ok(true) => ExitCode::from(EXIT_VIOLATIONS),
         Ok(false) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("error: {err:#}");
-            ExitCode::FAILURE
+            ExitCode::from(EXIT_OPERATIONAL)
         }
     }
 }

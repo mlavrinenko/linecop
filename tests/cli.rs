@@ -50,7 +50,7 @@ fn quiet_mode_suppresses_output() {
 // --- Violations ---
 
 #[test]
-fn violation_exits_nonzero() {
+fn violation_exits_one() {
     let dir = tempfile::tempdir().expect("tempdir");
     let cfg = write_config(dir.path(), "limits:\n  Rust: 2\n");
 
@@ -62,7 +62,7 @@ fn violation_exits_nonzero() {
         .arg("--config")
         .arg(&cfg)
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains("file(s) reported"));
 }
 
@@ -81,7 +81,7 @@ fn json_format_outputs_valid_json() {
         .arg("--format")
         .arg("json")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -94,17 +94,17 @@ fn json_format_outputs_valid_json() {
 // --- Error cases ---
 
 #[test]
-fn missing_explicit_config_exits_nonzero() {
+fn missing_explicit_config_exits_two() {
     linecop()
         .arg("--config")
         .arg("/nonexistent/config.yaml")
         .assert()
-        .failure()
+        .code(2)
         .stderr(predicate::str::contains("failed to read config file"));
 }
 
 #[test]
-fn nonexistent_scan_path_exits_nonzero() {
+fn nonexistent_scan_path_exits_two() {
     let dir = tempfile::tempdir().expect("tempdir");
     let cfg = write_config(dir.path(), "limits:\n  Rust: 500\n");
 
@@ -113,8 +113,46 @@ fn nonexistent_scan_path_exits_nonzero() {
         .arg("--config")
         .arg(&cfg)
         .assert()
-        .failure()
+        .code(2)
         .stderr(predicate::str::contains("scan path does not exist"));
+}
+
+/// A broken config must not read as ordinary violations, even when the tree
+/// holds a file that would trip the limit.
+fn assert_config_error(config: &str, stderr: &str) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = write_config(dir.path(), config);
+    std::fs::write(
+        dir.path().join("big.rs"),
+        "fn a() {}\nfn b() {}\nfn c() {}\n",
+    )
+    .expect("write");
+
+    linecop()
+        .arg(dir.path())
+        .arg("--config")
+        .arg(&cfg)
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(stderr));
+}
+
+#[test]
+fn malformed_config_exits_two() {
+    assert_config_error("limits: [Rust: 2\n", "failed to parse config file");
+}
+
+#[test]
+fn invalid_override_glob_exits_two() {
+    assert_config_error(
+        "limits:\n  Rust: 2\noverrides:\n  - pattern: \"src/[\"\n    limit: 1\n",
+        "invalid glob pattern",
+    );
+}
+
+#[test]
+fn unknown_language_exits_two() {
+    assert_config_error("limits:\n  NotALanguage: 2\n", "unknown language");
 }
 
 // --- Configless mode ---
@@ -234,7 +272,7 @@ fn init_refuses_to_overwrite_existing() {
         .arg(dir.path())
         .arg("init")
         .assert()
-        .failure()
+        .code(2)
         .stderr(predicate::str::contains("already exists"));
 }
 
@@ -255,7 +293,7 @@ fn paths_format_outputs_only_paths() {
         .arg("--format")
         .arg("paths")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -302,7 +340,7 @@ fn baseline_reports_near_limit_files() {
         .arg("--baseline")
         .arg("80")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains("near.rs"));
 }
 
@@ -345,7 +383,7 @@ fn baseline_json_includes_baseline_limit() {
         .arg("--format")
         .arg("json")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -362,14 +400,14 @@ fn baseline_rejects_invalid_values() {
         .arg("--baseline")
         .arg("0")
         .assert()
-        .failure()
+        .code(2)
         .stderr(predicate::str::contains("invalid"));
 
     linecop()
         .arg("--baseline")
         .arg("101")
         .assert()
-        .failure()
+        .code(2)
         .stderr(predicate::str::contains("invalid"));
 }
 
@@ -421,7 +459,7 @@ fn include_hidden_config_reports_dot_dir_file() {
         .arg("--config")
         .arg(&cfg)
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains("probe.sh"));
 }
 
@@ -437,6 +475,6 @@ fn hidden_flag_reports_dot_dir_file() {
         .arg(&cfg)
         .arg("--hidden")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains("probe.sh"));
 }

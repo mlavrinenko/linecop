@@ -59,6 +59,16 @@ linecop [PATH] <COMMAND>
 | `--color <auto\|always\|never>` | Control color output |
 | `--no-config-warning` | Suppress the warning when no config file is found |
 
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | No file exceeds its limit |
+| `1` | Violations found — the codebase needs attention |
+| `2` | Operational error — the check never ran: malformed or unreadable config, unknown language, invalid override glob, missing scan path, I/O failure, bad CLI arguments |
+
+In a gate recipe, treat `2` as a broken gate rather than as violations.
+
 ### Examples
 
 ```bash
