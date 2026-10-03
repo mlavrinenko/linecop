@@ -5,11 +5,16 @@ default:
     @just --list
 
 # Run all checks (format + clippy + tests + file size)
+# Silent on success; on a test failure prints the full test log.
 check:
-    just fmt-check
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo fmt --all -- --check
     cargo clippy --workspace --all-targets -q -- -D warnings
-    cargo test --workspace -q
-    just check-file-size
+    log=$(mktemp)
+    trap 'rm -f "$log"' EXIT
+    cargo test --workspace -q >"$log" 2>&1 || { cat "$log"; exit 1; }
+    cargo run -q -- --quiet || { cargo run -q --; exit 1; }
 
 # Run tests only
 test *ARGS:
