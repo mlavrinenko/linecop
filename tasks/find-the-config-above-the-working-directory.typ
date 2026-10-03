@@ -27,5 +27,17 @@ working directory to find their config.
 
 = Scope
 
-- Walk up from the scanned path to the filesystem root (or a repo boundary, to
-  decide) and use the nearest `.linecop.yaml`.
+- Walk up from the scanned path (canonicalized, so `..` and symlinks resolve)
+  and use the nearest `.linecop.yaml`, stopping after the repository root: the
+  first directory holding `.git` (directory or file, for worktrees), `.jj`,
+  `.hg` or `.svn`.
+- Outside any repository, keep today's stop at the working directory.
+- Opt-in `--config-search <repo|root>` (default `repo`): `root` walks on to the
+  filesystem root, for the rare tree that is no repository.
+- `--config` still bypasses discovery.
+- End-to-end tests through the binary: from a subdirectory of a repo, from a
+  subdirectory with `src` scanned, a config above the repo root is not found by
+  default and is found with `--config-search root`, a nested repo stops at its
+  own root.
+- README, help text, changelog (0.7.0 section, still unreleased) and the
+  linecop skill say where the config is found.
