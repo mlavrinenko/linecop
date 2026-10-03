@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Cap a file by bytes as well as lines",
-  status: proposed(2026, 10, 3),
+  status: done(2026, 10, 3),
 )
 
 = Summary
