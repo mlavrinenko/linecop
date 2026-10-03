@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pipe through `--format paths`. Its evals run on a fixture that
   `tests/skill_fixture.rs` pins
 
+### Changed
+
+- **Breaking:** an override pattern is a `.gitignore` line, matched by the
+  `ignore` crate. `*` no longer crosses `/`, so `src/*.rs` stops at `src/`;
+  write `src/**/*.rs` to reach subdirectories. A pattern without a slash, such
+  as `RESEARCH.md`, matches at any depth. A `!` pattern is a config error, and
+  no override reaches a file outside the config file's directory
+
 ### Fixed
 
 - An override pattern is a path from the config file's directory. It used to be

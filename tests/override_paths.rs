@@ -67,7 +67,7 @@ fn a_leading_dot_slash_means_the_config_directory() {
 
 #[test]
 fn a_pattern_for_another_file_still_misses() {
-    let dir = repo("big.rs");
+    let dir = repo("tables.rs");
     linecop().current_dir(dir.path()).assert().code(1);
 }
 
@@ -80,4 +80,60 @@ fn reported_paths_keep_the_scanned_prefix() {
         .assert()
         .code(1)
         .stdout("./src/big.rs\n");
+}
+
+// --- gitignore rules ---
+
+fn reported(pattern: &str) -> String {
+    let dir = repo(pattern);
+    std::fs::create_dir(dir.path().join("src/gen")).expect("mkdir");
+    std::fs::write(
+        dir.path().join("src/gen/deep.rs"),
+        "fn a() {}\nfn b() {}\nfn c() {}\n",
+    )
+    .expect("write");
+    let out = linecop()
+        .current_dir(dir.path())
+        .args(["--format", "paths"])
+        .output()
+        .expect("run");
+    String::from_utf8(out.stdout).expect("utf-8")
+}
+
+#[test]
+fn a_star_stays_inside_one_directory() {
+    assert_eq!(reported("src/*.rs"), "./src/gen/deep.rs\n");
+}
+
+#[test]
+fn a_double_star_crosses_directories() {
+    assert_eq!(reported("src/**/*.rs"), "");
+}
+
+#[test]
+fn a_pattern_without_a_slash_matches_at_any_depth() {
+    assert_eq!(reported("deep.rs"), "./src/big.rs\n");
+    assert_eq!(reported("*.rs"), "");
+}
+
+#[test]
+fn a_leading_slash_anchors_to_the_config_directory() {
+    assert_eq!(reported("/big.rs"), "./src/big.rs\n./src/gen/deep.rs\n");
+    assert_eq!(reported("/src/big.rs"), "./src/gen/deep.rs\n");
+}
+
+#[test]
+fn a_trailing_slash_covers_a_directory() {
+    assert_eq!(reported("gen/"), "./src/big.rs\n");
+    assert_eq!(reported("src/"), "");
+}
+
+#[test]
+fn a_negated_pattern_is_a_config_error() {
+    let dir = repo("!src/big.rs");
+    linecop()
+        .current_dir(dir.path())
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("!src/big.rs"));
 }

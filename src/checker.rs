@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use globset::{Glob, GlobMatcher};
+use ignore::gitignore::Gitignore;
 
-use crate::config::{Config, CountMode};
+use crate::config::{Config, CountMode, compile_pattern};
 use crate::counter::FileStats;
 
 /// A measured count held against its cap.
@@ -52,7 +52,7 @@ pub struct Violation {
 
 /// A compiled override rule ready for matching.
 struct CompiledOverride {
-    matcher: GlobMatcher,
+    matcher: Gitignore,
     limit: Option<u64>,
     max_bytes: Option<u64>,
     exclude: bool,
@@ -64,15 +64,20 @@ impl CompiledOverride {
             .overrides
             .iter()
             .filter_map(|ovr| {
-                let pattern = ovr.pattern.trim_start_matches("./");
-                Glob::new(pattern).ok().map(|glob| Self {
-                    matcher: glob.compile_matcher(),
+                compile_pattern(&ovr.pattern).ok().map(|matcher| Self {
+                    matcher,
                     limit: ovr.limit,
                     max_bytes: ovr.max_bytes,
                     exclude: ovr.exclude,
                 })
             })
             .collect()
+    }
+
+    fn matches(&self, path: &Path) -> bool {
+        self.matcher
+            .matched_path_or_any_parents(path, false)
+            .is_ignore()
     }
 }
 
@@ -92,14 +97,16 @@ fn select_count(file: &FileStats, mode: CountMode) -> u64 {
     }
 }
 
-/// The path override patterns see: relative to the config file's directory,
-/// or as scanned when there is none or the file lies outside it.
-fn match_path(path: &Path, base: Option<&Path>) -> PathBuf {
-    base.and_then(|base| {
-        let canonical = path.canonicalize().ok()?;
-        canonical.strip_prefix(base).ok().map(Path::to_path_buf)
-    })
-    .unwrap_or_else(|| path.to_path_buf())
+/// The path override patterns see: relative to the config file's directory.
+/// `None` for a file outside it, which no override reaches, as a
+/// `.gitignore` never reaches outside its own directory. Without a config
+/// file, the path as scanned.
+fn match_path(path: &Path, base: Option<&Path>) -> Option<PathBuf> {
+    let Some(base) = base else {
+        return path.is_relative().then(|| path.to_path_buf());
+    };
+    let canonical = path.canonicalize().ok()?;
+    canonical.strip_prefix(base).ok().map(Path::to_path_buf)
 }
 
 /// Finds the caps for a file, or `None` when it is excluded. The first
@@ -118,7 +125,8 @@ fn effective_caps(
             .or(config.default_limit)
     };
     let path = match_path(&file.path, config.base_dir.as_deref());
-    match compiled.iter().find(|ovr| ovr.matcher.is_match(&path)) {
+    let matched = path.and_then(|path| compiled.iter().find(|ovr| ovr.matches(&path)));
+    match matched {
         Some(ovr) if ovr.exclude => None,
         Some(ovr) => Some(Caps {
             lines: ovr.limit.or_else(language_limit),
@@ -464,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn file_outside_the_config_directory_matches_as_scanned() {
+    fn no_override_reaches_outside_the_config_directory() {
         let file = make_file("src/gen.rs", "Rust", 10, 0, 0);
         let overrides = vec![Override {
             pattern: "src/gen.rs".into(),
@@ -474,6 +482,7 @@ mod tests {
         }];
         let mut config = make_config(&[("Rust", 5)], overrides, CountMode::Total);
         config.base_dir = Some("/nonexistent/repo".into());
-        assert_eq!(caps(&file, &config), None);
+        let lines = caps(&file, &config).and_then(|caps| caps.lines);
+        assert_eq!(lines, Some(5));
     }
 }

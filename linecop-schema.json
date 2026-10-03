@@ -430,7 +430,7 @@
           "minimum": 0
         },
         "pattern": {
-          "description": "Glob pattern matched against the file path relative to the config\nfile's directory, e.g. `src/generated_*.rs`. A leading `./` is allowed.",
+          "description": "A `.gitignore` line, relative to the config file's directory: `*` stays\nwithin a directory, `**` crosses them, and a pattern without a slash\nmatches at any depth. `!` negation is not supported.",
           "type": "string"
         }
       },

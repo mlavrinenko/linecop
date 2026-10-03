@@ -127,9 +127,20 @@ include_hidden: false  # scan .just/scripts, .github/scripts, ...
 
 Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
 
-An override pattern is a path from the directory holding the config file, so
-`src/generated_*.rs` matches the same files under `linecop`, `linecop src/` or
-`linecop /abs/repo`, and from any working directory.
+An override pattern is a `.gitignore` line, read from the directory holding the
+config file, so it matches the same files whatever you scan and wherever you run
+linecop:
+
+| Pattern | Matches |
+|---------|---------|
+| `RESEARCH.md` | that name at any depth |
+| `src/*.rs` | `.rs` files directly in `src/` |
+| `src/**/*.rs` | `.rs` files anywhere under `src/` |
+| `/build.rs` | `build.rs` at the top only |
+| `vendor/` | every file under any `vendor` directory |
+
+The first matching override wins. `!` negation is not supported; order the
+overrides instead.
 
 An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
 file whose lines are paragraphs, so `max_bytes` caps its size too; the file

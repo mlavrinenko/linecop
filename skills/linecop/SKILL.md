@@ -35,7 +35,7 @@ directory. Read it before writing, not after the gate trips.
 
 - `limits`: per language, by tokei name (`Rust`, `Markdown`, `Python`). A
   language with no entry is not checked.
-- `overrides`: per glob, a path from the config's directory; the first match
+- `overrides`: `.gitignore` patterns from the config's directory; the first match
   wins. Each sets `limit`, `max_bytes`, or `exclude: true`.
 - `count_mode`: `total` (default), `code`, or `code-comments`.
 - `exclude_dirs`, `include_hidden`: what the scan skips.

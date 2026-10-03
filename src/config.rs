@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokei::LanguageType;
@@ -26,8 +27,9 @@ pub enum CountMode {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Override {
-    /// Glob pattern matched against the file path relative to the config
-    /// file's directory, e.g. `src/generated_*.rs`. A leading `./` is allowed.
+    /// A `.gitignore` line, relative to the config file's directory: `*` stays
+    /// within a directory, `**` crosses them, and a pattern without a slash
+    /// matches at any depth. `!` negation is not supported.
     pub pattern: String,
     /// Custom line limit for matched files.
     #[serde(default)]
@@ -156,16 +158,39 @@ pub fn validate(config: &Config) -> Result<()> {
                 ovr.pattern
             );
         }
-        // Validate that the glob pattern compiles
-        globset::Glob::new(&ovr.pattern).with_context(|| {
+        compile_pattern(&ovr.pattern).with_context(|| {
             format!(
-                "invalid glob pattern in override #{}: {:?}",
+                "invalid pattern in override #{}: {:?}",
                 idx + 1,
                 ovr.pattern
             )
         })?;
     }
     Ok(())
+}
+
+/// Compiles an override pattern as one `.gitignore` line, matched against
+/// paths relative to the config file's directory. A leading `./` anchors it
+/// there, as a leading `/` does.
+///
+/// # Errors
+///
+/// Returns an error for a pattern gitignore rejects, a `!` negation (overrides
+/// apply first-match, so order them instead), or a line that is no pattern.
+pub fn compile_pattern(pattern: &str) -> Result<Gitignore> {
+    if pattern.starts_with('!') {
+        bail!("`!` negation is not supported; the first matching override wins");
+    }
+    let line = pattern
+        .strip_prefix("./")
+        .map_or_else(|| pattern.to_owned(), |rest| format!("/{rest}"));
+    let mut builder = GitignoreBuilder::new("");
+    builder.add_line(None, &line)?;
+    let matcher = builder.build()?;
+    if matcher.num_ignores() == 0 {
+        bail!("matches nothing: empty, or a `#` comment");
+    }
+    Ok(matcher)
 }
 
 #[cfg(test)]
@@ -247,12 +272,12 @@ overrides:
 limits:
   Rust: 500
 overrides:
-  - pattern: "[invalid"
+  - pattern: "[z-a]"
     exclude: true
 "#;
         let config: Config = serde_yml::from_str(yaml).expect("parse");
         let err = validate(&config).expect_err("should reject invalid glob");
-        assert!(err.to_string().contains("invalid glob pattern"));
+        assert!(err.to_string().contains("invalid pattern"));
     }
 
     #[test]

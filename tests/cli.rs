@@ -135,8 +135,8 @@ fn malformed_config_exits_two() {
 #[test]
 fn invalid_override_glob_exits_two() {
     assert_config_error(
-        "limits:\n  Rust: 2\noverrides:\n  - pattern: \"src/[\"\n    limit: 1\n",
-        "invalid glob pattern",
+        "limits:\n  Rust: 2\noverrides:\n  - pattern: \"src/[z-a]\"\n    limit: 1\n",
+        "invalid pattern",
     );
 }
 

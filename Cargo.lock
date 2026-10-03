@@ -714,7 +714,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
- "globset",
+ "ignore",
  "predicates",
  "schemars",
  "serde",
