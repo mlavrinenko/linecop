@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Match override patterns with gitignore rules",
-  status: wip(2026, 10, 3),
+  status: done(2026, 10, 3),
 )
 
 = Summary
