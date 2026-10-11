@@ -17,7 +17,7 @@
 
 = Changes
 
-- `flake.nix`: add `worktrunk` to the dev shell packages.
+- `flake.nix`: add `worktrunk` to the dev shell packages. The pinned nixpkgs (2026-03-08) has no such package, so `nix flake update nixpkgs` moves the pin to 2026-10-08 (rustc 1.93 to 1.98); `just check` stays green on it.
 - `.config/wt.toml` (new): `pre-start` runs `direnv allow`; `pre-merge` runs `direnv exec . just check`, then `direnv exec . mt check --commits {{ target }}..HEAD`, whose tip rule refuses a branch that names a task left `wip`.
 - `Justfile`: `fork SLUG *ARGS` runs `wt switch --create --yes`, `land *ARGS` runs `wt merge --no-squash --no-commit --yes`. The flags keep every `Refs:` footer and refuse a dirty tree.
 - `AGENT.md`, `CONTRIBUTING.md`: delegate with `just fork <slug>`, land with `just land`, never a bare `wt merge`.
