@@ -1,9 +1,7 @@
 //! The config is found by walking up from the scanned path to the repository
 //! root, so running inside a subdirectory checks against the repo's config.
 
-mod common;
-
-use common::{linecop, write_config};
+use crate::common::{linecop, write_config};
 use std::path::Path;
 
 const STRICT: &str = "limits:\n  Rust: 2\n";

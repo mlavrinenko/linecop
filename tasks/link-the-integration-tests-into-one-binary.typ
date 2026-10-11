@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Link the integration tests into one binary",
-  status: proposed(2026, 10, 11),
+  status: done(2026, 10, 11),
 )
 
 = Summary

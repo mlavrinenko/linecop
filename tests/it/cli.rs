@@ -1,6 +1,4 @@
-mod common;
-
-use common::{linecop, write_config};
+use crate::common::{linecop, write_config};
 use predicates::prelude::predicate;
 
 // --- Happy path ---

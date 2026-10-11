@@ -2,9 +2,7 @@
 //! one config gives the same verdict whatever path is scanned and wherever
 //! linecop runs from.
 
-mod common;
-
-use common::{linecop, write_config};
+use crate::common::{linecop, write_config};
 use std::path::Path;
 
 /// A repo whose `src/big.rs` is over the Rust limit unless the override for

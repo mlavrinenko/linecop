@@ -16,7 +16,7 @@ CLI — `mt add` stamps the status and slugs the filename, and a hand-written ta
 file skips that. The task body is Typst and is yours to edit; run `mt check`
 after.
 
-Commits use Conventional Commits with a footer `Refs: tasks/<stem>.typ` naming
+Commits use Conventional Commits with a footer `Refs: <stem>` naming
 the driving task. Commits that only file or edit task artifacts carry no `Refs:`
 — a task commit refs nothing.
 

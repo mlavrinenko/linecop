@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An agent skill, `skills/linecop`, that has an agent check headroom with
   `--baseline` before it grows a file, split or raise a limit on purpose, and
   pipe through `--format paths`. Its evals run on a fixture that
-  `tests/skill_fixture.rs` pins
+  `tests/it/skill_fixture.rs` pins
 
 ### Changed
 

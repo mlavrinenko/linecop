@@ -1,7 +1,7 @@
 {
   "skill_name": "linecop",
   "fixtures": {
-    "note": "Copy the fixture to a scratch dir and run there, never in place: evals edit files, and the fixture is pinned by tests/skill_fixture.rs. See README.md.",
+    "note": "Copy the fixture to a scratch dir and run there, never in place: evals edit files, and the fixture is pinned by tests/it/skill_fixture.rs. See README.md.",
     "kvconf": "skills/linecop/evals/fixture"
   },
   "evals": [

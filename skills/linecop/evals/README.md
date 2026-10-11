@@ -14,7 +14,7 @@ arms compared. Run executor and grader on Sonnet, the same model for both arms.
 - `src/tables.rs` is generated and over its limit, so the honest fix is an
   override with a comment, not a split.
 
-`tests/skill_fixture.rs` pins that state, so `just check` fails the moment the
+`tests/it/skill_fixture.rs` pins that state, so `just check` fails the moment the
 fixture drifts. An ungated fixture rots silently: mindtape's skill sandbox
 outlived two config migrations unnoticed in a gitignored scratch tree.
 
