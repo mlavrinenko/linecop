@@ -40,6 +40,7 @@
             clippy
             rustfmt
             just
+            worktrunk
             nixd
             rust-analyzer
             tokei

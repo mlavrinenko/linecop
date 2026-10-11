@@ -74,6 +74,21 @@ file-sizes:
 check-file-size:
     cargo run -q -- --quiet
 
+# Fork a sibling worktree on a new branch (`just fork <slug>`); extra flags go to
+# `wt switch`, e.g. `--base=@` to branch from HEAD, not main. The `pre-start`
+# hook in .config/wt.toml allows the new worktree's `.envrc`.
+[positional-arguments]
+fork SLUG *ARGS:
+    wt switch --create --yes "$@"
+
+# Gate, fast-forward the branch onto main and remove its worktree; run it in the
+# worktree. `--no-squash --no-commit` keeps each commit's `Refs:` footer and
+# refuses a dirty tree instead of committing it; the `pre-merge` hooks in
+# .config/wt.toml run the gate and the wip check before the fast-forward.
+[positional-arguments]
+land *ARGS:
+    wt merge --no-squash --no-commit --yes "$@"
+
 # Tag and push a release
 release version:
     @echo "Tagging v{{version}}..."
