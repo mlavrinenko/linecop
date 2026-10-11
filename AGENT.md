@@ -6,6 +6,12 @@
 - Use `-q` for cargo commands — only show errors/warnings
 - After any code changes, run `just check` and fix all warnings
 - If clippy suggests `--fix`, use `cargo clippy --fix --workspace --all-targets`
+- Delegated work forks with `just fork <slug>` (a sibling worktree on a new
+  branch, dev shell allowed) and lands with `just land` run in that worktree:
+  it gates, checks no named task is left `wip`, fast-forwards main and removes
+  the worktree. Both wrap [worktrunk](https://worktrunk.dev);
+  [.config/wt.toml](.config/wt.toml) holds the hooks. Never run a bare
+  `wt merge`: it squashes away the `Refs:` footers.
 
 ## Tasks
 

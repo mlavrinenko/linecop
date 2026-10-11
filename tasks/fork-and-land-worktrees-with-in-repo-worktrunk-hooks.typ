@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Fork and land worktrees with in-repo worktrunk hooks",
-  status: wip(2026, 10, 11),
+  status: done(2026, 10, 11),
 )
 
 = Summary
