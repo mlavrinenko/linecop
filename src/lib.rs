@@ -10,7 +10,7 @@ pub mod schema;
 pub(crate) mod test_helpers;
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Result, bail};
 
@@ -36,26 +36,28 @@ pub struct RunOptions<'a> {
     pub hidden: bool,
 }
 
-/// Runs the full linecop check pipeline.
+/// Runs the full linecop check pipeline over `path`, or with `None` over the
+/// config's `root`, else the working directory.
 ///
 /// Returns `true` if there are violations (the CLI exits 1); errors mean the
 /// check never ran (the CLI exits 2).
 ///
 /// # Errors
 ///
-/// Returns an error if the root path does not exist, the config cannot be loaded,
+/// Returns an error if the scan path does not exist, the config cannot be loaded,
 /// counting fails, or output fails.
-pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
-    if !root.exists() {
-        bail!("scan path does not exist: {}", root.display());
+pub fn run(path: Option<&Path>, opts: &RunOptions<'_>) -> Result<bool> {
+    let start = path.unwrap_or_else(|| Path::new("."));
+    if !start.exists() {
+        bail!("scan path does not exist: {}", start.display());
     }
 
-    let root_abs = std::path::absolute(root)?;
+    let start_abs = std::path::absolute(start)?;
     let cwd = std::env::current_dir()?;
 
     let mut cfg = if let Some(explicit) = opts.config_path {
         config::load(explicit)?
-    } else if let Some(found) = discovery::find_config(&root_abs, &cwd, opts.config_search) {
+    } else if let Some(found) = discovery::find_config(&start_abs, &cwd, opts.config_search) {
         config::load(&found)?
     } else {
         if !opts.quiet && !opts.no_config_warning {
@@ -71,7 +73,11 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
 
     cfg.include_hidden |= opts.hidden;
 
-    let files = counter::count(root, &cfg)?;
+    let scan = match (path, &cfg.root, &cfg.base_dir) {
+        (None, Some(_), Some(root)) => relative_to(root, &std::fs::canonicalize(&cwd)?),
+        _ => start.to_path_buf(),
+    };
+    let files = counter::count(&scan, &cfg)?;
     let violations = checker::check(&files, &cfg, opts.baseline);
 
     if !opts.quiet {
@@ -82,9 +88,35 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
     Ok(!violations.is_empty())
 }
 
+/// `target` as a path from `base`, both canonical, so a scan of the config's
+/// `root` prints paths the way a scan of the same path typed in `base` would:
+/// `.` for `base` itself, `src` below it, `..` above it. `target` unchanged
+/// when the two share no root, as on two Windows drives.
+fn relative_to(target: &Path, base: &Path) -> PathBuf {
+    let shared = target
+        .components()
+        .zip(base.components())
+        .take_while(|(aa, bb)| aa == bb)
+        .count();
+    if shared == 0 {
+        return target.to_path_buf();
+    }
+    let mut rel: PathBuf = base
+        .components()
+        .skip(shared)
+        .map(|_| Component::ParentDir)
+        .collect();
+    rel.extend(target.components().skip(shared));
+    if rel.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        rel
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RunOptions, run};
+    use super::{RunOptions, relative_to, run};
     use crate::report::Format;
     use std::io::Write;
     use std::path::Path;
@@ -113,7 +145,7 @@ mod tests {
         let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
         write!(cfg_file, "limits:\n  Rust: 500\n").expect("write");
 
-        let has_violations = run(dir.path(), &opts_with_config(&cfg_path)).expect("run");
+        let has_violations = run(Some(dir.path()), &opts_with_config(&cfg_path)).expect("run");
         assert!(!has_violations);
     }
 
@@ -131,7 +163,7 @@ mod tests {
         let mut cfg_file = std::fs::File::create(&cfg_path).expect("create");
         write!(cfg_file, "limits:\n  Rust: 3\n").expect("write");
 
-        let has_violations = run(dir.path(), &opts_with_config(&cfg_path)).expect("run");
+        let has_violations = run(Some(dir.path()), &opts_with_config(&cfg_path)).expect("run");
         assert!(has_violations);
     }
 
@@ -139,7 +171,7 @@ mod tests {
     fn run_missing_explicit_config() {
         let dir = tempfile::tempdir().expect("tempdir");
         let cfg_path = dir.path().join(".linecop.yaml");
-        let result = run(dir.path(), &opts_with_config(&cfg_path));
+        let result = run(Some(dir.path()), &opts_with_config(&cfg_path));
         assert!(result.is_err());
     }
 
@@ -161,7 +193,7 @@ mod tests {
             baseline: 100,
             hidden: false,
         };
-        let has_violations = run(dir.path(), &opts).expect("run");
+        let has_violations = run(Some(dir.path()), &opts).expect("run");
         assert!(!has_violations);
     }
 
@@ -176,7 +208,7 @@ mod tests {
             baseline: 100,
             hidden: false,
         };
-        let result = run(Path::new("/nonexistent/path"), &opts);
+        let result = run(Some(Path::new("/nonexistent/path")), &opts);
         let err = result.expect_err("should fail for nonexistent path");
         assert!(err.to_string().contains("scan path does not exist"));
     }
@@ -197,7 +229,7 @@ mod tests {
         write!(cfg_file, "limits:\n  Rust: 3\n").expect("write");
 
         assert!(
-            !run(dir.path(), &opts_with_config(&cfg_path)).expect("run"),
+            !run(Some(dir.path()), &opts_with_config(&cfg_path)).expect("run"),
             "config alone leaves the dot-directory unscanned"
         );
 
@@ -205,7 +237,10 @@ mod tests {
             hidden: true,
             ..opts_with_config(&cfg_path)
         };
-        assert!(run(dir.path(), &opts).expect("run"), "--hidden reaches it");
+        assert!(
+            run(Some(dir.path()), &opts).expect("run"),
+            "--hidden reaches it"
+        );
     }
 
     #[test]
@@ -231,7 +266,16 @@ mod tests {
             baseline: 80,
             hidden: false,
         };
-        let has_violations = run(dir.path(), &opts).expect("run");
+        let has_violations = run(Some(dir.path()), &opts).expect("run");
         assert!(has_violations, "4 lines >= 80% of 5 = 4");
+    }
+
+    #[test]
+    fn relative_to_names_the_way_from_base() {
+        let rel = |target: &str, base: &str| relative_to(Path::new(target), Path::new(base));
+        assert_eq!(rel("/repo", "/repo"), Path::new("."));
+        assert_eq!(rel("/repo/src", "/repo"), Path::new("src"));
+        assert_eq!(rel("/repo", "/repo/docs/deep"), Path::new("../.."));
+        assert_eq!(rel("/repo/src", "/repo/docs"), Path::new("../src"));
     }
 }

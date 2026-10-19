@@ -18,6 +18,7 @@ pub fn make_file(path: &str, lang: &str, code: u64, comments: u64, blanks: u64) 
 
 pub fn make_config(limits: &[(&str, u64)], overrides: Vec<Override>, mode: CountMode) -> Config {
     Config {
+        root: None,
         count_mode: mode,
         limits: limits
             .iter()

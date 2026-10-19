@@ -373,6 +373,14 @@
       "items": {
         "$ref": "#/$defs/Override"
       }
+    },
+    "root": {
+      "description": "The directory this config describes, as a path from the config file's\ndirectory (default: that directory). Override patterns resolve from\nit, and linecop scans it when no path is given. A config kept in\n`.config/` sets `root: ..`.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
     }
   },
   "additionalProperties": false,
@@ -430,7 +438,7 @@
           "minimum": 0
         },
         "pattern": {
-          "description": "A `.gitignore` line, relative to the config file's directory: `*` stays\nwithin a directory, `**` crosses them, and a pattern without a slash\nmatches at any depth. `!` negation is not supported.",
+          "description": "A `.gitignore` line, relative to `root` (default: the config file's\ndirectory): `*` stays within a directory, `**` crosses them, and a\npattern without a slash matches at any depth. `!` negation is not\nsupported.",
           "type": "string"
         }
       },

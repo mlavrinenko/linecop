@@ -132,9 +132,9 @@ include_hidden: false  # scan .just/scripts, .github/scripts, ...
 
 Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
 
-An override pattern is a `.gitignore` line, read from the directory holding the
-config file, so it matches the same files whatever you scan and wherever you run
-linecop:
+An override pattern is a `.gitignore` line, read from the config's `root` (the
+directory holding the config file, unless you set one), so it matches the same
+files whatever you scan and wherever you run linecop:
 
 | Pattern | Matches |
 |---------|---------|
@@ -146,6 +146,25 @@ linecop:
 
 The first matching override wins. `!` negation is not supported; order the
 overrides instead.
+
+### Config in `.config/`
+
+Keep your tool configs in `.config/`? Point `root` back at the repo. It's a path
+from the config file's own directory, every pattern reads from it, and a bare
+`linecop` scans it. Leave it out and both stay at the config file's directory.
+
+```yaml
+# .config/linecop.yaml
+root: ..  # the repo, one level up
+limits:
+  Markdown: 200
+overrides:
+  - pattern: "CHANGELOG.md"  # read from root, so it reaches ./CHANGELOG.md
+    exclude: true
+```
+
+`linecop -c .config/linecop.yaml` now gives the same verdict as a
+`.linecop.yaml` at the top would.
 
 An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
 file whose lines are paragraphs, so `max_bytes` caps its size too; the file

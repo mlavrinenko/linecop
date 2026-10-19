@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `root` config key: the directory the config describes, as a path from the
+  config file's directory. Override patterns resolve from it, and with no `PATH`
+  argument linecop scans it, printing paths from the working directory (`./`
+  when it is the working directory). So a `.config/linecop.yaml` with
+  `root: ..` gives the same verdict as a `.linecop.yaml` at the top. A `root`
+  that is no directory is a config error. Without `root`, nothing changes
+
 ## 0.7.0 - 2026-10-03
 
 ### Added

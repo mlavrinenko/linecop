@@ -36,8 +36,11 @@ writing, not after the gate trips.
 
 - `limits`: per language, by tokei name (`Rust`, `Markdown`, `Python`). A
   language with no entry is not checked.
-- `overrides`: `.gitignore` patterns from the config's directory; the first match
-  wins. Each sets `limit`, `max_bytes`, or `exclude: true`.
+- `root`: the tree the config describes, as a path from the config's own
+  directory (default: that directory). Patterns read from it, and a bare
+  `linecop` scans it. A config in `.config/` sets `root: ..`.
+- `overrides`: `.gitignore` patterns from `root`; the first match wins. Each
+  sets `limit`, `max_bytes`, or `exclude: true`.
 - `count_mode`: `total` (default), `code`, or `code-comments`.
 - `exclude_dirs`, `include_hidden`: what the scan skips.
 

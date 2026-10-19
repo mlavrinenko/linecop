@@ -97,7 +97,7 @@ fn select_count(file: &FileStats, mode: CountMode) -> u64 {
     }
 }
 
-/// The path override patterns see: relative to the config file's directory.
+/// The path override patterns see: relative to the config's `root`.
 /// `None` for a file outside it, which no override reaches, as a
 /// `.gitignore` never reaches outside its own directory. Without a config
 /// file, the path as scanned.

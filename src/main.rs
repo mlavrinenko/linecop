@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -19,9 +19,8 @@ const EXIT_OPERATIONAL: u8 = 2;
     version
 )]
 struct Cli {
-    /// Root directory to scan.
-    #[arg(default_value = ".")]
-    path: PathBuf,
+    /// Directory to scan (default: the config's `root`, else the current directory).
+    path: Option<PathBuf>,
 
     /// Path to the config file (default: auto-detected).
     #[arg(short, long)]
@@ -107,7 +106,10 @@ fn main() -> ExitCode {
             } else {
                 linecop::init::SchemaMode::Default
             };
-            return run_subcommand(linecop::init::create(&cli.path, &mode));
+            return run_subcommand(linecop::init::create(
+                cli.path.as_deref().unwrap_or_else(|| Path::new(".")),
+                &mode,
+            ));
         }
         Some(Command::Schema) => return run_subcommand(linecop::schema::generate()),
         None => {}
@@ -123,7 +125,7 @@ fn main() -> ExitCode {
         hidden: cli.hidden,
     };
 
-    match linecop::run(&cli.path, &opts) {
+    match linecop::run(cli.path.as_deref(), &opts) {
         Ok(true) => ExitCode::from(EXIT_VIOLATIONS),
         Ok(false) => ExitCode::SUCCESS,
         Err(err) => {

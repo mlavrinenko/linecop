@@ -314,6 +314,12 @@ section { padding: 3rem 0; }
   line-height: 1.7;
 }
 
+.config-example p {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 1.2rem 0 0.6rem;
+}
+
 /* ==================== FOOTER ==================== */
 
 footer {
@@ -500,6 +506,14 @@ exclude_dirs:
   - node_modules
 
 include_hidden: false  # scan .just/scripts, .github/scripts, ...</code></pre>
+      <p>Keep your configs in <code>.config/</code>? Set <code>root: ..</code> and every pattern reads from the repo again.</p>
+<pre><code class="language-yaml"># .config/linecop.yaml
+root: ..  # the repo, one level up
+limits:
+  Markdown: 200
+overrides:
+  - pattern: "CHANGELOG.md"  # read from root, so it reaches ./CHANGELOG.md
+    exclude: true</code></pre>
     </div>
   </div>
 </section>

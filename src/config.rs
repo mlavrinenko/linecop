@@ -27,9 +27,10 @@ pub enum CountMode {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Override {
-    /// A `.gitignore` line, relative to the config file's directory: `*` stays
-    /// within a directory, `**` crosses them, and a pattern without a slash
-    /// matches at any depth. `!` negation is not supported.
+    /// A `.gitignore` line, relative to `root` (default: the config file's
+    /// directory): `*` stays within a directory, `**` crosses them, and a
+    /// pattern without a slash matches at any depth. `!` negation is not
+    /// supported.
     pub pattern: String,
     /// Custom line limit for matched files.
     #[serde(default)]
@@ -52,6 +53,12 @@ fn default_exclude_dirs() -> Vec<String> {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// The directory this config describes, as a path from the config file's
+    /// directory (default: that directory). Override patterns resolve from
+    /// it, and linecop scans it when no path is given. A config kept in
+    /// `.config/` sets `root: ..`.
+    #[serde(default)]
+    pub root: Option<PathBuf>,
     /// What to count: "total" (default), "code", "code-comments".
     #[serde(default)]
     pub count_mode: CountMode,
@@ -74,8 +81,8 @@ pub struct Config {
     #[serde(default)]
     #[schemars(skip)]
     pub default_limit: Option<u64>,
-    /// The config file's directory, which override patterns are relative to.
-    /// `None` matches them against paths as scanned.
+    /// The resolved `root`, canonical: the directory override patterns are
+    /// relative to. `None` matches them against paths as scanned.
     #[serde(skip)]
     #[schemars(skip)]
     pub base_dir: Option<PathBuf>,
@@ -87,6 +94,7 @@ impl Config {
     #[must_use]
     pub fn fallback() -> Self {
         Self {
+            root: None,
             count_mode: CountMode::default(),
             limits: BTreeMap::new(),
             overrides: Vec::new(),
@@ -103,7 +111,7 @@ impl Config {
 /// # Errors
 ///
 /// Returns an error if the file cannot be read, parsed, or contains invalid
-/// language names or override rules.
+/// language names or override rules, or if its `root` is no directory.
 pub fn load(path: &Path) -> Result<Config> {
     let contents = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config file: {}", path.display()))?;
@@ -113,7 +121,17 @@ pub fn load(path: &Path) -> Result<Config> {
     let canonical = path
         .canonicalize()
         .with_context(|| format!("failed to resolve config file: {}", path.display()))?;
-    config.base_dir = canonical.parent().map(Path::to_path_buf);
+    let config_dir = canonical.parent().map(Path::to_path_buf);
+    config.base_dir = match (&config.root, config_dir) {
+        (Some(root), Some(dir)) => Some(
+            dir.join(root)
+                .canonicalize()
+                .ok()
+                .filter(|resolved| resolved.is_dir())
+                .with_context(|| format!("root {root:?} in {} is no directory", path.display()))?,
+        ),
+        (_, config_dir) => config_dir,
+    };
     Ok(config)
 }
 
@@ -150,7 +168,7 @@ pub fn validate(config: &Config) -> Result<()> {
 }
 
 /// Compiles an override pattern as one `.gitignore` line, matched against
-/// paths relative to the config file's directory. A leading `./` anchors it
+/// paths relative to the config's `root`. A leading `./` anchors it
 /// there, as a leading `/` does.
 ///
 /// # Errors
@@ -177,6 +195,7 @@ pub fn compile_pattern(pattern: &str) -> Result<Gitignore> {
 mod tests {
     use super::{Config, CountMode, Override, load, validate};
     use std::io::Write;
+    use std::path::PathBuf;
 
     #[test]
     fn parse_valid_config() {
@@ -281,6 +300,29 @@ overrides:
     fn load_missing_file() {
         let result = load(std::path::Path::new("/nonexistent/.linecop.yaml"));
         assert!(result.is_err());
+    }
+
+    /// The `base_dir` of a `.config/linecop.yaml` holding `head`, and the
+    /// canonical repo directory above it.
+    fn base_dir_under_dot_config(head: &str) -> (Option<PathBuf>, PathBuf) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".config/linecop.yaml");
+        std::fs::create_dir(dir.path().join(".config")).expect("mkdir");
+        std::fs::write(&path, format!("{head}limits:\n  Rust: 500\n")).expect("write");
+        let config = load(&path).expect("load");
+        (config.base_dir, dir.path().canonicalize().expect("canon"))
+    }
+
+    #[test]
+    fn load_without_root_anchors_at_the_config_directory() {
+        let (base, repo) = base_dir_under_dot_config("");
+        assert_eq!(base, Some(repo.join(".config")));
+    }
+
+    #[test]
+    fn load_resolves_root_from_the_config_directory() {
+        let (base, repo) = base_dir_under_dot_config("root: ..\n");
+        assert_eq!(base, Some(repo));
     }
 
     #[test]
