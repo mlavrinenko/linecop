@@ -29,7 +29,7 @@ struct Cli {
 
     /// How far up to look for the config: to the repository root, or to the filesystem root.
     #[arg(long, value_enum, default_value = "repo")]
-    config_search: linecop::config::ConfigSearch,
+    config_search: linecop::discovery::ConfigSearch,
 
     /// Suppress output (exit code only).
     #[arg(short, long)]

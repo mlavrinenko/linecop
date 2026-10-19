@@ -1,6 +1,7 @@
 pub mod checker;
 pub mod config;
 pub mod counter;
+pub mod discovery;
 pub mod init;
 pub mod report;
 pub mod schema;
@@ -20,7 +21,7 @@ pub struct RunOptions<'a> {
     /// Explicit config path (from `--config`). When `None`, config is discovered automatically.
     pub config_path: Option<&'a Path>,
     /// How far config discovery walks up (from `--config-search`).
-    pub config_search: config::ConfigSearch,
+    pub config_search: discovery::ConfigSearch,
     /// Suppress all stdout output.
     pub quiet: bool,
     /// Output format.
@@ -54,7 +55,7 @@ pub fn run(root: &Path, opts: &RunOptions<'_>) -> Result<bool> {
 
     let mut cfg = if let Some(explicit) = opts.config_path {
         config::load(explicit)?
-    } else if let Some(found) = config::find_config(&root_abs, &cwd, opts.config_search) {
+    } else if let Some(found) = discovery::find_config(&root_abs, &cwd, opts.config_search) {
         config::load(&found)?
     } else {
         if !opts.quiet && !opts.no_config_warning {
@@ -91,7 +92,7 @@ mod tests {
     fn opts_with_config(path: &Path) -> RunOptions<'_> {
         RunOptions {
             config_path: Some(path),
-            config_search: crate::config::ConfigSearch::default(),
+            config_search: crate::discovery::ConfigSearch::default(),
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
@@ -153,7 +154,7 @@ mod tests {
 
         let opts = RunOptions {
             config_path: None,
-            config_search: crate::config::ConfigSearch::default(),
+            config_search: crate::discovery::ConfigSearch::default(),
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
@@ -168,7 +169,7 @@ mod tests {
     fn run_nonexistent_root_path() {
         let opts = RunOptions {
             config_path: None,
-            config_search: crate::config::ConfigSearch::default(),
+            config_search: crate::discovery::ConfigSearch::default(),
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
@@ -223,7 +224,7 @@ mod tests {
 
         let opts = RunOptions {
             config_path: Some(&cfg_path),
-            config_search: crate::config::ConfigSearch::default(),
+            config_search: crate::discovery::ConfigSearch::default(),
             quiet: true,
             format: Format::Text,
             no_config_warning: true,
