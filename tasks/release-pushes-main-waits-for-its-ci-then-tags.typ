@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Release pushes main, waits for its CI, then tags",
-  status: proposed(2026, 10, 20),
+  status: done(2026, 10, 20),
 )
 
 = Summary

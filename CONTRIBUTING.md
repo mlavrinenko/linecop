@@ -21,6 +21,23 @@ direnv needs no worktrunk config of its own. A new worktree runs `direnv allow`;
 before the fast-forward `just check` and `mt check --commits main..HEAD` run,
 and the second refuses a branch that names a task still `wip`.
 
+## Releasing
+
+Bump `version` in `Cargo.toml` (and `Cargo.lock`), give the release a dated
+`CHANGELOG.md` section (`## X.Y.Z - date`) and commit it on main; don't push.
+Then:
+
+```bash
+just release X.Y.Z --dry-run   # every check, then what it would push
+just release X.Y.Z             # push main, wait for its CI, tag, push the tag
+```
+
+The recipe pushes main, waits for the `ci.yml` run on that exact commit, and
+tags only if the run is green. The tag push is the only publish path: never
+`cargo publish`, push main or tag by hand. Each refusal prints `error:` and a
+`hint:` with the way out. A release whose `release.yml` run failed is finished
+on the same tag with `gh run rerun <run> --failed`; a pushed tag never moves.
+
 ## Code Style
 
 All clippy lints are set to `deny` level — the project will not compile with violations.

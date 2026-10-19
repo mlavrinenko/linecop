@@ -12,6 +12,9 @@
   the worktree. Both wrap [worktrunk](https://worktrunk.dev);
   [.config/wt.toml](.config/wt.toml) holds the hooks. Never run a bare
   `wt merge`: it squashes away the `Refs:` footers.
+- Releases go through `just release X.Y.Z` (`--dry-run` first), which pushes main,
+  waits for its CI and tags. Never push main or a tag by hand; see
+  [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
 ## Tasks
 
