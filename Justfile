@@ -76,18 +76,30 @@ check-file-size:
 
 # Fork a sibling worktree on a new branch (`just fork <slug>`); extra flags go to
 # `wt switch`, e.g. `--base=@` to branch from HEAD, not main. The `pre-start`
-# hook in .config/wt.toml allows the new worktree's `.envrc`.
+# hook in .config/wt.toml allows the new worktree's `.envrc`. `wt` writes its cd
+# directive to a temp file nobody reads, which keeps it from warning that shell
+# integration is missing.
 [positional-arguments]
 fork SLUG *ARGS:
-    wt switch --create --yes "$@"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd_file=$(mktemp)
+    trap 'rm -f "$cd_file"' EXIT
+    WORKTRUNK_DIRECTIVE_CD_FILE="$cd_file" wt switch --create --yes "$@"
 
 # Gate, fast-forward the branch onto main and remove its worktree; run it in the
 # worktree. `--no-squash --no-commit` keeps each commit's `Refs:` footer and
 # refuses a dirty tree instead of committing it; the `pre-merge` hooks in
-# .config/wt.toml run the gate and the wip check before the fast-forward.
+# .config/wt.toml run the gate and the wip check before the fast-forward. The cd
+# directive goes to a temp file nobody reads, as in `fork`; `wt`'s exit code is
+# the recipe's.
 [positional-arguments]
 land *ARGS:
-    wt merge --no-squash --no-commit --yes "$@"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd_file=$(mktemp)
+    trap 'rm -f "$cd_file"' EXIT
+    WORKTRUNK_DIRECTIVE_CD_FILE="$cd_file" wt merge --no-squash --no-commit --yes "$@"
 
 # Tag and push a release
 release version:
