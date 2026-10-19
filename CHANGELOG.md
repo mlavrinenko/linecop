@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `root: ..` gives the same verdict as a `.linecop.yaml` at the top. A `root`
   that is no directory is a config error. Without `root`, nothing changes
 
+- Discovery looks for `.config/linecop.yaml` too: each directory on the walk
+  is checked for `.linecop.yaml`, then `.config/linecop.yaml`. A found file
+  reads exactly as under `--config`, so it needs `root: ..`. The warning for a
+  missing config names both places
+
 ## 0.7.0 - 2026-10-03
 
 ### Added

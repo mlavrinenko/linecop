@@ -108,3 +108,45 @@ fn a_root_that_is_no_directory_is_a_config_error() {
         .code(2)
         .stderr(predicates::str::contains("nowhere"));
 }
+
+// --- discovery ---
+
+#[test]
+fn discovery_finds_the_config_in_dot_config() {
+    let dir = repo("root: ..\n");
+    linecop()
+        .current_dir(dir.path())
+        .args(["--format", "paths"])
+        .assert()
+        .code(1)
+        .stdout("./src/other.rs\n")
+        .stderr("");
+}
+
+#[test]
+fn discovery_from_a_subdirectory_scans_the_root() {
+    let dir = repo("root: ..\n");
+    assert_eq!(
+        paths(&dir.path().join("src"), &[]),
+        (Some(1), "../src/other.rs\n".to_owned())
+    );
+}
+
+#[test]
+fn a_dot_linecop_yaml_beside_it_wins() {
+    let dir = repo("root: ..\n");
+    write(&dir.path().join(".linecop.yaml"), "limits:\n  Rust: 100\n");
+    assert_eq!(paths(dir.path(), &[]), (Some(0), String::new()));
+}
+
+#[test]
+fn the_fallback_warning_names_both_places() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    linecop()
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stderr(predicates::str::contains(
+            "no .linecop.yaml or .config/linecop.yaml found",
+        ));
+}

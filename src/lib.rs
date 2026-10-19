@@ -64,7 +64,7 @@ pub fn run(path: Option<&Path>, opts: &RunOptions<'_>) -> Result<bool> {
             let mut stderr = anstream::stderr().lock();
             writeln!(
                 stderr,
-                "warning: no .linecop.yaml found, using default limit of {} lines for all files",
+                "warning: no .linecop.yaml or .config/linecop.yaml found, using default limit of {} lines for all files",
                 config::DEFAULT_LIMIT
             )?;
         }

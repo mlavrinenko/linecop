@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 /// Directory entries that mark a repository root.
 const REPO_MARKERS: [&str; 4] = [".git", ".jj", ".hg", ".svn"];
 
+/// Where a directory's config may sit, checked in this order.
+const CONFIG_NAMES: [&str; 2] = [".linecop.yaml", ".config/linecop.yaml"];
+
 /// How far up config discovery walks.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum ConfigSearch {
@@ -19,11 +22,12 @@ fn is_repo_root(dir: &Path) -> bool {
     REPO_MARKERS.iter().any(|marker| dir.join(marker).exists())
 }
 
-/// Searches for the nearest `.linecop.yaml` from `start` (canonicalized, so
-/// `..` and symlinks resolve) upwards. With [`ConfigSearch::Repo`] the walk
-/// ends at the first directory holding a repository marker, or at `cwd` when
-/// no marker exists up the chain; with [`ConfigSearch::Root`] it ends at the
-/// filesystem root. Returns the first path found, or `None`.
+/// Searches for the nearest config from `start` (canonicalized, so `..` and
+/// symlinks resolve) upwards: `.linecop.yaml`, else `.config/linecop.yaml`,
+/// in each directory. With [`ConfigSearch::Repo`] the walk ends at the first
+/// directory holding a repository marker, or at `cwd` when no marker exists up
+/// the chain; with [`ConfigSearch::Root`] it ends at the filesystem root.
+/// Returns the first path found, or `None`.
 #[must_use]
 pub fn find_config(start: &Path, cwd: &Path, search: ConfigSearch) -> Option<PathBuf> {
     let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
@@ -42,7 +46,7 @@ pub fn find_config(start: &Path, cwd: &Path, search: ConfigSearch) -> Option<Pat
     };
     dirs.iter()
         .take(limit)
-        .map(|dir| dir.join(".linecop.yaml"))
+        .flat_map(|dir| CONFIG_NAMES.map(|name| dir.join(name)))
         .find(|candidate| candidate.is_file())
 }
 
@@ -112,6 +116,27 @@ mod tests {
         let cfg = dir.path().join(".linecop.yaml");
         std::fs::write(&cfg, "limits:\n  Rust: 5\n").expect("write");
         let found = find_config(&sub, &sub, ConfigSearch::Repo);
+        assert_eq!(found, Some(std::fs::canonicalize(cfg).expect("canon")));
+    }
+
+    #[test]
+    fn find_config_in_dot_config() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(dir.path().join(".config")).expect("mkdir");
+        let cfg = dir.path().join(".config/linecop.yaml");
+        std::fs::write(&cfg, "limits:\n  Rust: 5\n").expect("write");
+        let found = find_config(dir.path(), dir.path(), ConfigSearch::Repo);
+        assert_eq!(found, Some(std::fs::canonicalize(cfg).expect("canon")));
+    }
+
+    #[test]
+    fn find_config_prefers_dot_linecop_yaml_in_one_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(dir.path().join(".config")).expect("mkdir");
+        std::fs::write(dir.path().join(".config/linecop.yaml"), "limits: {}\n").expect("write");
+        let cfg = dir.path().join(".linecop.yaml");
+        std::fs::write(&cfg, "limits: {}\n").expect("write");
+        let found = find_config(dir.path(), dir.path(), ConfigSearch::Repo);
         assert_eq!(found, Some(std::fs::canonicalize(cfg).expect("canon")));
     }
 }

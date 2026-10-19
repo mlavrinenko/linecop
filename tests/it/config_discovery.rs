@@ -76,7 +76,9 @@ fn other_vcs_markers_stop_the_walk() {
             .current_dir(inner.join("src"))
             .assert()
             .success()
-            .stderr(predicates::str::contains("no .linecop.yaml found"));
+            .stderr(predicates::str::contains(
+                "no .linecop.yaml or .config/linecop.yaml found",
+            ));
     }
 }
 
@@ -96,7 +98,9 @@ fn warns_and_passes(cwd: &Path, args: &[&str]) {
         .args(args)
         .assert()
         .success()
-        .stderr(predicates::str::contains("no .linecop.yaml found"));
+        .stderr(predicates::str::contains(
+            "no .linecop.yaml or .config/linecop.yaml found",
+        ));
 }
 
 #[test]

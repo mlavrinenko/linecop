@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Resolve config paths from a root key",
-  status: wip(2026, 10, 19),
+  status: done(2026, 10, 19),
 )
 
 = Summary

@@ -157,7 +157,9 @@ fn no_config_runs_with_default_limit_and_warning() {
         .arg(dir.path())
         .assert()
         .success()
-        .stderr(predicate::str::contains("no .linecop.yaml found"))
+        .stderr(predicate::str::contains(
+            "no .linecop.yaml or .config/linecop.yaml found",
+        ))
         .stdout(predicate::str::contains("All files within size limits"));
 }
 

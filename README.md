@@ -102,8 +102,9 @@ for a file whose override sets `max_bytes`.
 ## Configuration
 
 Create a `.linecop.yaml` in your project root. linecop uses the nearest one found
-walking up from the scanned path, and stops after the repository root (a directory
-with `.git`, `.jj`, `.hg` or `.svn`), or at the working directory outside a
+walking up from the scanned path, taking `.config/linecop.yaml` where a directory
+has no `.linecop.yaml`, and stops after the repository root (a directory with
+`.git`, `.jj`, `.hg` or `.svn`), or at the working directory outside a
 repository. `--config-search root` walks on to the filesystem root; `--config`
 skips the search.
 
@@ -163,8 +164,9 @@ overrides:
     exclude: true
 ```
 
-`linecop -c .config/linecop.yaml` now gives the same verdict as a
-`.linecop.yaml` at the top would.
+A bare `linecop` finds it there and gives the same verdict as a `.linecop.yaml`
+at the top would. linecop reads the file the same way under `-c`, so it needs
+`root: ..` either way.
 
 An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
 file whose lines are paragraphs, so `max_bytes` caps its size too; the file

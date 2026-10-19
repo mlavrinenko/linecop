@@ -1,13 +1,14 @@
 ---
 name: linecop
 description: >-
-  Budget a file's size before writing to it, in any repo with a `.linecop.yaml`.
-  linecop caps every file by lines (or bytes) per language; load this before
-  growing an existing file, and whenever size comes up without the tool's name:
-  "this file is too long", "the size gate is failing", "split this module",
-  "what is near the limit", "how much room is left". Covers the `--baseline`
-  headroom check, where a file's limit comes from, splitting versus raising a
-  limit, and `--format paths`/`json`/`-q` for scripts and gates.
+  Budget a file's size before writing to it, in any repo with a `.linecop.yaml`
+  or `.config/linecop.yaml`. linecop caps every file by lines (or bytes) per
+  language; load this before growing an existing file, and whenever size comes
+  up without the tool's name: "this file is too long", "the size gate is
+  failing", "split this module", "what is near the limit", "how much room is
+  left". Covers the `--baseline` headroom check, where a file's limit comes
+  from, splitting versus raising a limit, and `--format paths`/`json`/`-q` for
+  scripts and gates.
 ---
 
 # linecop
@@ -30,9 +31,9 @@ violation already there is not yours to fix in passing; name it and move on.
 
 ## Where a limit comes from
 
-`.linecop.yaml`, the nearest one walking up from the scanned path to the
-repository root (the working directory outside a repository). Read it before
-writing, not after the gate trips.
+`.linecop.yaml` (else `.config/linecop.yaml`), the nearest one walking up from
+the scanned path to the repository root (the working directory outside a
+repository). Read it before writing, not after the gate trips.
 
 - `limits`: per language, by tokei name (`Rust`, `Markdown`, `Python`). A
   language with no entry is not checked.
