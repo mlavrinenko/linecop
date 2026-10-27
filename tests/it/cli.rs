@@ -407,3 +407,38 @@ fn file_under_line_limit_but_over_max_bytes_fails() {
             essay.len() - 100
         )));
 }
+
+// --- Language keys ---
+
+/// A `limits` key caps its language under any spelling tokei parses: tokei
+/// names the shebang-only hook `BASH`, and `Bash` and `bash` reach it too.
+#[test]
+fn limits_key_caps_its_language_in_any_case() {
+    for key in ["Bash", "bash", "BASH"] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_config(dir.path(), &format!("limits:\n  {key}: 1\n"));
+        std::fs::write(
+            dir.path().join("pre-commit"),
+            "#!/usr/bin/env bash\necho hi\n",
+        )
+        .expect("write");
+
+        linecop()
+            .current_dir(dir.path())
+            .assert()
+            .code(1)
+            .stdout(predicate::str::contains("pre-commit: 2 lines (limit: 1"));
+    }
+}
+
+#[test]
+fn limits_keys_naming_one_language_twice_are_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_config(dir.path(), "limits:\n  Bash: 1\n  BASH: 2\n");
+
+    linecop()
+        .current_dir(dir.path())
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("BASH"));
+}

@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Cap a language under any spelling its limits key parses as",
-  status: proposed(2026, 10, 28),
+  status: done(2026, 10, 28),
 )
 
 = Summary

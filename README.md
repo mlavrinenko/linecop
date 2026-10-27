@@ -131,7 +131,11 @@ exclude_dirs:
 include_hidden: false  # scan .just/scripts, .github/scripts, ...
 ```
 
-Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages).
+Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages)
+in any case: `Bash`, `bash` and `BASH` all cap what tokei calls `BASH`, and
+naming one language twice is a config error. tokei picks a file's language by
+name, then extension, then shebang, so an extensionless `#!/usr/bin/env bash`
+hook counts as `BASH`.
 
 An override pattern is a `.gitignore` line, read from the config's `root` (the
 directory holding the config file, unless you set one), so it matches the same

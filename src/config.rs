@@ -118,6 +118,7 @@ pub fn load(path: &Path) -> Result<Config> {
     let mut config: Config = serde_yml::from_str(&contents)
         .with_context(|| format!("failed to parse config file: {}", path.display()))?;
     validate(&config)?;
+    config.limits = canonical_limits(&config.limits)?;
     let canonical = path
         .canonicalize()
         .with_context(|| format!("failed to resolve config file: {}", path.display()))?;
@@ -165,6 +166,30 @@ pub fn validate(config: &Config) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+/// Rekeys `limits` by tokei's display name, the name a counted file carries,
+/// so a key holds its language under any spelling tokei parses: `Bash`,
+/// `bash` and `BASH` all cap the files tokei calls `BASH`.
+///
+/// # Errors
+///
+/// Returns an error for a key tokei does not know, or for two keys that
+/// name one language.
+pub fn canonical_limits(limits: &BTreeMap<String, u64>) -> Result<BTreeMap<String, u64>> {
+    let mut canonical = BTreeMap::new();
+    for (key, limit) in limits {
+        let Ok(language) = key.parse::<LanguageType>() else {
+            bail!("unknown language in limits: {key:?}");
+        };
+        if canonical
+            .insert(language.name().to_owned(), *limit)
+            .is_some()
+        {
+            bail!("limits name {} twice, once as {key:?}", language.name());
+        }
+    }
+    Ok(canonical)
 }
 
 /// Compiles an override pattern as one `.gitignore` line, matched against
