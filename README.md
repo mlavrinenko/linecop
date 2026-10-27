@@ -3,9 +3,8 @@
 [![CI](https://github.com/mlavrinenko/linecop/actions/workflows/ci.yml/badge.svg)](https://github.com/mlavrinenko/linecop/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/linecop.svg)](https://crates.io/crates/linecop)
 
-Language-aware file size linter. Patrols your code base to enforce per-language
-line count limits using [tokei](https://github.com/XAMPPRocky/tokei) for
-accurate counting.
+Language-aware file size linter. It patrols your code base for per-language
+line limits, counted by [tokei](https://github.com/XAMPPRocky/tokei).
 
 ## Installation
 
@@ -23,7 +22,7 @@ nix run github:mlavrinenko/linecop
 
 ### Binary releases
 
-Pre-built binaries for Linux and macOS are available on the
+Linux and macOS binaries are on the
 [releases page](https://github.com/mlavrinenko/linecop/releases).
 
 ## Quick start
@@ -101,12 +100,10 @@ for a file whose override sets `max_bytes`.
 
 ## Configuration
 
-Create a `.linecop.yaml` in your project root. linecop uses the nearest one found
-walking up from the scanned path, taking `.config/linecop.yaml` where a directory
-has no `.linecop.yaml`, and stops after the repository root (a directory with
-`.git`, `.jj`, `.hg` or `.svn`), or at the working directory outside a
-repository. `--config-search root` walks on to the filesystem root; `--config`
-skips the search.
+Create a `.linecop.yaml` in your project root. linecop walks up from the scanned
+path to the nearest `.linecop.yaml`, else `.config/linecop.yaml`, and stops after
+the repository root (`.git`, `.jj`, `.hg` or `.svn`), or at the working directory
+outside one. `--config-search root` walks on to `/`; `--config` skips the search.
 
 ```yaml
 limits:
@@ -131,11 +128,10 @@ exclude_dirs:
 include_hidden: false  # scan .just/scripts, .github/scripts, ...
 ```
 
-Language names follow [tokei conventions](https://github.com/XAMPPRocky/tokei#supported-languages)
-in any case: `Bash`, `bash` and `BASH` all cap what tokei calls `BASH`, and
-naming one language twice is a config error. tokei picks a file's language by
-name, then extension, then shebang, so an extensionless `#!/usr/bin/env bash`
-hook counts as `BASH`.
+Language names follow [tokei](https://github.com/XAMPPRocky/tokei#supported-languages)
+in any case, so `Bash` caps what tokei calls `BASH`; naming one language twice
+is an error. tokei goes by file name, extension, then shebang: a hook with no
+extension and `#!/usr/bin/env bash` counts as `BASH`.
 
 An override pattern is a `.gitignore` line, read from the config's `root` (the
 directory holding the config file, unless you set one), so it matches the same
@@ -168,17 +164,16 @@ overrides:
     exclude: true
 ```
 
-A bare `linecop` finds it there and gives the same verdict as a `.linecop.yaml`
-at the top would. linecop reads the file the same way under `-c`, so it needs
-`root: ..` either way.
+A bare `linecop` finds it there and judges as a top-level `.linecop.yaml` would.
+Under `-c` it reads the same, so it needs `root: ..` either way.
 
 An override sets `limit`, `max_bytes`, or both. A line limit does not bound a
 file whose lines are paragraphs, so `max_bytes` caps its size too; the file
 breaches when it exceeds either, and the report names which:
-`--- CONTRIBUTING.md: 31204 bytes (max_bytes: 14000, +17204 over)`. An override
-without `limit` keeps the language limit, and `--baseline` applies to both.
-An override's caps need no `limits` entry for the language: a `docs/*.typ`
-override with `limit: 300` caps those files even with no `Typst` key.
+`--- CONTRIBUTING.md: 31204 bytes (max_bytes: 14000, +17204 over)`. Without
+`limit` an override keeps the language limit, and `--baseline` applies to both.
+Its caps need no `limits` entry: `docs/*.typ` with `limit: 300` holds even with
+no `Typst` key.
 
 Dot-prefixed files and directories are skipped unless `include_hidden: true`
 (or `--hidden`) is set. With it on, `.git`, `.hg`, `.svn` and `.jj` stay out of
