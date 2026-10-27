@@ -135,3 +135,27 @@ fn a_negated_pattern_is_a_config_error() {
         .code(2)
         .stderr(predicates::str::contains("!src/big.rs"));
 }
+
+/// An override's caps need no `limits` entry for the file's language: a
+/// Markdown file is held to them under a Rust-only `limits`.
+#[test]
+fn override_caps_stand_without_a_language_base() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_config(
+        dir.path(),
+        "limits:\n  Rust: 500\noverrides:\n  - pattern: \"docs/*.md\"\n    limit: 2\n  - pattern: \"NOTES.md\"\n    max_bytes: 5\n",
+    );
+    std::fs::create_dir(dir.path().join("docs")).expect("mkdir");
+    std::fs::write(dir.path().join("docs/guide.md"), "a\nb\nc\n").expect("write");
+    std::fs::write(dir.path().join("NOTES.md"), "one long line\n").expect("write");
+    std::fs::write(dir.path().join("README.md"), "a\nb\nc\n").expect("write");
+
+    let output = linecop().current_dir(dir.path()).assert().code(1);
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout).into_owned();
+    assert!(stdout.contains("guide.md: 3 lines (limit: 2"), "{stdout}");
+    assert!(
+        stdout.contains("NOTES.md: 14 bytes (max_bytes: 5"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("README.md"), "no cap reaches it: {stdout}");
+}

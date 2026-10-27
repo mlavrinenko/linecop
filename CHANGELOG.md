@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   passed validation but capped nothing, since tokei names the language `BASH`;
   now `Bash`, `bash` and `BASH` all cap it, and naming one language twice is a
   config error
+- An override's `limit` and `max_bytes` stand without a `limits` entry for the
+  file's language. linecop counted only the languages named in `limits`, so an
+  override on any other language matched no file and did nothing; now, when an
+  override sets a cap, every language is counted
 
 ## 0.8.0 - 2026-10-19
 

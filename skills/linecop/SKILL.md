@@ -36,7 +36,7 @@ the scanned path to the repository root (the working directory outside a
 repository). Read it before writing, not after the gate trips.
 
 - `limits`: per language, by tokei name (`Rust`, `Markdown`, `Python`). A
-  language with no entry is not checked.
+  language with no entry is not checked, except by an override that caps it.
 - `root`: the tree the config describes, as a path from the config's own
   directory (default: that directory). Patterns read from it, and a bare
   `linecop` scans it. A config in `.config/` sets `root: ..`.

@@ -2,7 +2,7 @@
 
 #show: task.with(
   title: "Let an override limit stand without a language base",
-  status: proposed(2026, 10, 28),
+  status: done(2026, 10, 28),
 )
 
 = Summary

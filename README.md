@@ -177,6 +177,8 @@ file whose lines are paragraphs, so `max_bytes` caps its size too; the file
 breaches when it exceeds either, and the report names which:
 `--- CONTRIBUTING.md: 31204 bytes (max_bytes: 14000, +17204 over)`. An override
 without `limit` keeps the language limit, and `--baseline` applies to both.
+An override's caps need no `limits` entry for the language: a `docs/*.typ`
+override with `limit: 300` caps those files even with no `Typst` key.
 
 Dot-prefixed files and directories are skipped unless `include_hidden: true`
 (or `--hidden`) is set. With it on, `.git`, `.hg`, `.svn` and `.jj` stay out of

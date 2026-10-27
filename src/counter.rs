@@ -44,7 +44,8 @@ fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
 }
 
 /// Counts lines for all files under `root` that match languages in the config.
-/// When `limits` is empty (configless mode), all languages are scanned.
+/// All languages are scanned when `limits` is empty (configless mode) or an
+/// override sets a cap, since an override's cap needs no language base.
 /// Dot-prefixed files and directories are skipped unless `include_hidden` is
 /// set, in which case everything but VCS metadata is walked.
 ///
@@ -53,7 +54,11 @@ fn summarise(stats: &CodeStats) -> (u64, u64, u64) {
 /// Returns an error if a language name in the config is not recognized by tokei,
 /// or a counted file cannot be stat-ed for its size.
 pub fn count(root: &Path, config: &Config) -> Result<Vec<FileStats>> {
-    let types: Option<Vec<LanguageType>> = if config.limits.is_empty() {
+    let override_caps = config
+        .overrides
+        .iter()
+        .any(|ovr| ovr.limit.is_some() || ovr.max_bytes.is_some());
+    let types: Option<Vec<LanguageType>> = if config.limits.is_empty() || override_caps {
         None
     } else {
         Some(
